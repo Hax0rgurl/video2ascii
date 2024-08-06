@@ -1,6 +1,6 @@
 # video2ascii
 
-Welcome to the Videoto Ascii! This web-based application offers a unique blend of video processing and AI-generated ASCII art, providing users with a creative platform for digital art experimentation.
+Welcome to the Video to Ascii! This web-based application offers a unique blend of video processing and AI-generated ASCII art, providing users with a creative platform for digital art experimentation.
 You can use it here without downloading the code:
 https://hax0rgurl.github.io/video2ascii/
 
