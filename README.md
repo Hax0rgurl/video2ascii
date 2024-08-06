@@ -13,15 +13,15 @@ Welcome to the Ultimate ASCII Art and AI Video Generation Studio! This web-based
   - Frame rate (FPS)
   - Color options (colored or monochrome)
   - ASCII character sets (standard, extended, or custom)
-  - Color schemes (Matrix Green, Cyberpunk Neon, Retro Computer, Soft Pastel, Rainbow)
+  - Placeholder: Color schemes (Matrix Green, Cyberpunk Neon, Retro Computer, Soft Pastel, Rainbow)
   - Background and text color selection
-- Export ASCII animations as MP4 files
+  - Export ASCII animations as MP4 files
 - Additional features:
-  - Output resolution selection (480p, 720p, 1080p)
-  - Special effects (Matrix Rain, Glitch, Old TV)
-  - Option to keep original audio
+  - Place holder: Output resolution selection (480p, 720p, 1080p)
+  - Place holder: Special effects (Matrix Rain, Glitch, Old TV)
+  - Haven't been able to test it keeps crashing on long files: Option to keep original audio
 
-### 2. AI ASCII Art Generator
+### 2. AI ASCII Art Generator(NOT WORKING)
 
 - Generate ASCII art using AI based on text prompts
 - Choose from different art styles:
@@ -61,4 +61,4 @@ Created by HAx0rGurl aka Abandoned Muse
 
 ## License
 
-GNU 3.0 Creative License Free Open Source.
+GPL 3.0 License
