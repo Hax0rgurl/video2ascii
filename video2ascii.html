@@ -1,1 +1,437 @@
+<!DOCTYPE html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ultimate ASCII Art and AI Video Generation Studio</title>
+<style>
+body {
+  font-family: 'Courier New', monospace;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #000000;
+  color: #00FF00;
+}
+#video-container, #canvas-container {
+  margin-top: 20px;
+  text-align: center;
+}
+canvas {
+  border: 1px solid #00FF00;
+  max-width: 100%;
+}
+#loading {
+  display: none;
+  text-align: center;
+  margin-top: 20px;
+}
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+input, button, select {
+  margin: 5px;
+  padding: 5px;
+  background-color: #000000;
+  color: #00FF00;
+  border: 1px solid #00FF00;
+}
+#error {
+  color: #FF0000;
+  margin-top: 10px;
+}
+h1 {
+  text-align: center;
+  text-shadow: 0 0 10px #00FF00;
+}
+label {
+  color: #00FF00;
+}
+button {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+button:hover {
+  background-color: #00FF00;
+  color: #000000;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+#asciiCanvas {
+  background-color: #000000;
+}
+.module {
+  border: 1px solid #00FF00;
+  padding: 10px;
+  margin-top: 20px;
+}
+.module h2 {
+  color: #00FF00;
+  border-bottom: 1px solid #00FF00;
+  padding-bottom: 5px;
+}
+#aiGeneratedArt {
+  white-space: pre;
+  font-family: monospace;
+  line-height: 1;
+  overflow: auto;
+  max-height: 500px;
+  background-color: #000000;
+  color: #00FF00;
+  padding: 10px;
+  border: 1px solid #00FF00;
+}
+</style>
+</head>
+<body>
+<h1>Ultimate ASCII Art and AI Video Generation Studio</h1>
 
+<!-- Existing Video to ASCII Converter -->
+<div class="module">
+  <h2>Video to ASCII Converter</h2>
+  <input type="file" id="fileInput" accept="video/mp4">
+  <div id="video-container"></div>
+  <div id="canvas-container">
+    <canvas id="asciiCanvas"></canvas>
+  </div>
+  <div class="controls">
+  <div>
+    <input type="number" id="fontSizeInput" value="10" min="1" max="20" step="1">
+    <label for="fontSizeInput">Font Size</label>
+  </div>
+  <div>
+    <input type="number" id="fpsInput" value="24" min="1" max="60" step="1">
+    <label for="fpsInput">FPS</label>
+  </div>
+  <div>
+    <input type="checkbox" id="colorCheckbox">
+    <label for="colorCheckbox">Color</label>
+  </div>
+  <div>
+    <select id="asciiCharSet">
+      <option value="standard">Standard</option>
+      <option value="extended">Extended</option>
+      <option value="custom">Custom</option>
+    </select>
+    <label for="asciiCharSet">ASCII Character Set</label>
+  </div>
+  <div>
+    <input type="text" id="customAsciiChars" placeholder="Custom ASCII chars">
+  </div>
+  <div>
+    <label for="colorScheme">Color Scheme:</label>
+    <select id="colorScheme">
+      <option value="matrix">Matrix Green</option>
+      <option value="cyberpunk">Cyberpunk Neon</option>
+      <option value="retro">Retro Computer</option>
+      <option value="pastel">Soft Pastel</option>
+      <option value="rainbow">Rainbow</option>
+    </select>
+  </div>
+  <div>
+    <label for="backgroundColor">Background Color:</label>
+    <input type="color" id="backgroundColor" value="#000000">
+  </div>
+  <div>
+    <label for="textColor">Text Color:</label>
+    <input type="color" id="textColor" value="#00FF00">
+  </div>
+  <div>
+    <button id="convertButton">Convert to ASCII</button>
+    <button id="exportButton" disabled="">Export MP4</button>
+  </div>
+  
+  <!-- New features -->
+  <div>
+    <label for="resolutionSelect">Output Resolution:</label>
+    <select id="resolutionSelect">
+      <option value="480p">480p</option>
+      <option value="720p">720p</option>
+      <option value="1080p">1080p</option>
+    </select>
+  </div>
+  <div>
+    <label for="effectSelect">Special Effect:</label>
+    <select id="effectSelect">
+      <option value="none">None</option>
+      <option value="matrix">Matrix Rain</option>
+      <option value="glitch">Glitch</option>
+      <option value="oldTV">Old TV</option>
+    </select>
+  </div>
+  <div>
+    <label for="audioToggle">Keep Original Audio:</label>
+    <input type="checkbox" id="audioToggle" checked="">
+  </div>
+</div>
+</div>
+
+<!-- New AI ASCII Art Generator Module -->
+<div class="module">
+  <h2>AI ASCII Art Generator</h2>
+  <div class="controls">
+    <input type="text" id="promptInput" placeholder="Enter your prompt here">
+    <select id="artStyle">
+      <option value="default">Default</option>
+      <option value="minimalist">Minimalist</option>
+      <option value="detailed">Detailed</option>
+    </select>
+    <button id="generateArtButton">Generate ASCII Art</button>
+  </div>
+  <div id="aiGeneratedArt"></div>
+</div>
+
+<div id="loading">Processing... Please wait.</div>
+<div id="error"></div>
+
+<script>
+// Existing code
+const fileInput = document.getElementById('fileInput');
+const videoContainer = document.getElementById('video-container');
+const canvas = document.getElementById('asciiCanvas');
+const ctx = canvas.getContext('2d');
+const fontSizeInput = document.getElementById('fontSizeInput');
+const fpsInput = document.getElementById('fpsInput');
+const colorCheckbox = document.getElementById('colorCheckbox');
+const asciiCharSetSelect = document.getElementById('asciiCharSet');
+const customAsciiCharsInput = document.getElementById('customAsciiChars');
+const convertButton = document.getElementById('convertButton');
+const exportButton = document.getElementById('exportButton');
+const loadingDiv = document.getElementById('loading');
+const errorDiv = document.getElementById('error');
+
+let video, asciiFrames, mediaRecorder, recordedChunks;
+
+const ASCII_CHAR_SETS = {
+  standard: ['@', '#', 'S', '%', '?', '*', '+', ';', ':', ',', '.'],
+  extended: ['$', '@', 'B', '%', '8', '&', 'W', 'M', '#', '*', 'o', 'a', 'h', 'k', 'b', 'd', 'p', 'q', 'w', 'm', 'Z', 'O', '0', 'Q', 'L', 'C', 'J', 'U', 'Y', 'X', 'z', 'c', 'v', 'u', 'n', 'x', 'r', 'j', 'f', 't', '/', '\\', '|', '(', ')', '1', '{', '}', '[', ']', '?', '-', '_', '+', '~', '<', '>', 'i', '!', 'l', 'I', ';', ':', ',', '"', '^', '`', '\'', '.', ' ']
+};
+
+fileInput.addEventListener('change', handleFileSelect);
+convertButton.addEventListener('click', convertToAscii);
+exportButton.addEventListener('click', exportMP4);
+asciiCharSetSelect.addEventListener('change', toggleCustomCharsInput);
+
+function toggleCustomCharsInput() {
+  customAsciiCharsInput.style.display = asciiCharSetSelect.value === 'custom' ? 'inline' : 'none';
+}
+
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  const videoURL = URL.createObjectURL(file);
+  video = document.createElement('video');
+  video.src = videoURL;
+  video.controls = true;
+  videoContainer.innerHTML = '';
+  videoContainer.appendChild(video);
+  convertButton.disabled = false;
+}
+
+async function convertToAscii() {
+  showLoading(true);
+  asciiFrames = [];
+  const fontSize = parseInt(fontSizeInput.value);
+  const fps = parseInt(fpsInput.value);
+  const useColor = colorCheckbox.checked;
+  const asciiChars = getAsciiChars();
+
+  video.currentTime = 0;
+  const frameCount = Math.floor(video.duration * fps);
+  const frameInterval = 1 / fps;
+
+  for (let i = 0; i < frameCount; i++) {
+    video.currentTime = i * frameInterval;
+    await new Promise(resolve => video.onseeked = resolve);
+    const asciiFrame = videoFrameToAscii(video, fontSize, useColor, asciiChars);
+    asciiFrames.push(asciiFrame);
+  }
+
+  showLoading(false);
+  exportButton.disabled = false;
+}
+
+function getAsciiChars() {
+  const selectedSet = asciiCharSetSelect.value;
+  if (selectedSet === 'custom') {
+    return customAsciiCharsInput.value.split('');
+  }
+  return ASCII_CHAR_SETS[selectedSet];
+}
+
+function videoFrameToAscii(video, fontSize, useColor, asciiChars) {
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d');
+  tempCanvas.width = video.videoWidth;
+  tempCanvas.height = video.videoHeight;
+  tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+
+  const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+  const asciiFrame = [];
+
+  for (let y = 0; y < tempCanvas.height; y += fontSize) {
+    for (let x = 0; x < tempCanvas.width; x += fontSize / 2) {
+      const pixelIndex = (y * tempCanvas.width + x) * 4;
+      const r = imageData.data[pixelIndex];
+      const g = imageData.data[pixelIndex + 1];
+      const b = imageData.data[pixelIndex + 2];
+      const brightness = (r + g + b) / 3;
+      const charIndex = Math.floor((brightness / 255) * (asciiChars.length - 1));
+      const asciiChar = asciiChars[charIndex];
+      asciiFrame.push({ char: asciiChar, color: useColor ? `rgb(${r},${g},${b})` : '#00FF00' });
+    }
+    asciiFrame.push('\n');
+  }
+
+  return asciiFrame;
+}
+
+async function exportMP4() {
+  showLoading(true);
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const fontSize = parseInt(fontSizeInput.value);
+  const fps = parseInt(fpsInput.value);
+
+  const stream = canvas.captureStream(fps);
+  const options = { mimeType: 'video/webm;codecs=vp9' };
+  mediaRecorder = new MediaRecorder(stream, options);
+  recordedChunks = [];
+
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      recordedChunks.push(event.data);
+    }
+  };
+
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ascii_video.webm';
+    a.click();
+    URL.revokeObjectURL(url);
+    showLoading(false);
+  };
+
+  mediaRecorder.start();
+
+  for (const frame of asciiFrames) {
+    drawAsciiFrame(frame, fontSize);
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  }
+
+  mediaRecorder.stop();
+}
+
+function drawAsciiFrame(asciiChars, fontSize) {
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.font = `${fontSize}px 'Courier New', monospace`;
+  ctx.textBaseline = 'top';
+
+  let x = 0;
+  let y = 0;
+
+  for (const char of asciiChars) {
+    if (char === '\n') {
+      x = 0;
+      y += fontSize;
+    } else {
+      ctx.fillStyle = char.color;
+      ctx.fillText(char.char, x, y);
+      x += fontSize / 2;
+    }
+  }
+}
+
+function showLoading(show) {
+  loadingDiv.style.display = show ? 'block' : 'none';
+}
+
+function showError(message) {
+  errorDiv.textContent = message;
+}
+
+toggleCustomCharsInput();
+
+// New AI ASCII Art Generator Module
+const promptInput = document.getElementById('promptInput');
+const artStyle = document.getElementById('artStyle');
+const generateArtButton = document.getElementById('generateArtButton');
+const aiGeneratedArt = document.getElementById('aiGeneratedArt');
+
+generateArtButton.addEventListener('click', generateAIArt);
+
+async function generateAIArt() {
+  const prompt = promptInput.value;
+  const style = artStyle.value;
+  
+  if (!prompt) {
+    showError('Please enter a prompt for the AI art generator.');
+    return;
+  }
+
+  showLoading(true);
+  
+  try {
+    // Simulating AI generation with a simple ASCII art generator
+    const art = await simulateAIArtGeneration(prompt, style);
+    aiGeneratedArt.textContent = art;
+  } catch (error) {
+    showError('Error generating AI art: ' + error.message);
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function simulateAIArtGeneration(prompt, style) {
+  // This is a placeholder function. In a real implementation, you would call an AI service here.
+  await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate processing time
+
+  const artStyles = {
+    default: [
+      '  .---.  ',
+      ' /_____\\ ',
+      '( \'   \' )',
+      '(  (O)  )',
+      ' |  |  | ',
+      ' |__|__| ',
+      '/',
+    ],
+    minimalist: [
+      ' ___ ',
+      '|   |',
+      '|___|',
+      '  |  ',
+      '  |  ',
+    ],
+    detailed: [
+      '    ____    ',
+      '  ."    ".  ',
+      ' /  .-""-.\\ ',
+      '/  /      \\ \\',
+      '|  |  0  0| |',
+      '|  |   <  | |',
+      '|  |  \\__/| |',
+      '\\  \\______/ /',
+      ' \\________/ ',
+    ],
+  };
+
+  const baseArt = artStyles[style] || artStyles.default;
+  
+  // Add the prompt to the art
+  const art = [...baseArt, '', `"${prompt}"`];
+  
+  return art.join('\n');
+}
+
+// Debug
+console.log('ASCII Art Studio initialized successfully.');
+</script>
+</body></html>
