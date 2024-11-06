@@ -1,74 +1,65 @@
-# SkyBox Viewer Suite
+# video2ascii
 
-# You can play with your photos here: [SKYBOX Github Link](https://hax0rgurl.github.io/skybox/)
+Welcome to the Video to Ascii! This web-based application offers a unique blend of video processing and AI-generated ASCII art, providing users with a creative platform for digital art experimentation.
+You can use it here without downloading the code:
+https://hax0rgurl.github.io/video2ascii/
 
-## Overview
+## Features
 
-The SkyBox Viewer Suite consists of two complementary applications for exploring 360-degree environments:
+### 1. Video to ASCII Converter
 
-1. SkyBox Viewer Web App (Main Application)
-2. Skybox Standalone Viewer (Companion Application)
+- Upload MP4 videos and convert them to ASCII art animations
+- Customizable settings:
+  - Font size
+  - Frame rate (FPS)
+  - Color options (colored or monochrome)
+  - ASCII character sets (standard, extended, or custom)
+  - Placeholder: Color schemes (Matrix Green, Cyberpunk Neon, Retro Computer, Soft Pastel, Rainbow)
+  - Background and text color selection
+  - Export ASCII animations as MP4 files
+- Additional features:
+  - Place holder: Output resolution selection (480p, 720p, 1080p)
+  - Place holder: Special effects (Matrix Rain, Glitch, Old TV)
+  - Haven't been able to test it keeps crashing on long files: Option to keep original audio
 
-These applications provide immersive experiences with various controls for navigation and viewing options.
+### 2. AI ASCII Art Generator(NOT WORKING)
 
-## SkyBox Viewer Web App (Main Application)
+- Generate ASCII art using AI based on text prompts
+- Choose from different art styles:
+  - Default
+  - Minimalist
+  - Detailed
 
-### Features
+## How to Use
 
-- Fullscreen mode (toggle with 'F' key)
-- Toggle HUD (Heads-Up Display)
-- Auto-rotate functionality
-- Reset view option
-- Interactive mouse/touch controls for looking around
-- Custom environment upload (2:1 or 16:9 equirectangular images)
+1. Video to ASCII Converter:
+   - Upload an MP4 file using the file input
+   - Adjust settings as desired
+   - Click "Convert to ASCII" to process the video
+   - Once processed, click "Export MP4" to save the ASCII animation to your download folder.
 
-### Usage
+2. AI ASCII Art Generator: (STILL TO BE BUILT..SHOULD BE CONNECTED TO AN LLM)
+   - Enter a text prompt in the input field
+   - Select an art style from the dropdown menu
+   - Click "Generate ASCII Art" to create AI-generated ASCII art
 
-1. Open SkyBoxViewerWebApp.html in a web browser.
-2. Use mouse/touch to look around the environment.
-3. Press 'F' for fullscreen mode, 'Esc' to exit.
-4. Use on-screen controls for additional functions.
+## Technical Details
 
-### Beta Notice
+- Built using HTML, CSS, and JavaScript
+- Utilizes HTML5 Canvas for video processing and ASCII rendering
+- Simulates AI art generation (Note: This is a placeholder and would need to be replaced with an actual AI service in a production environment)
 
-The Web App is currently in BETA. Users can explore an environment by default.
+## Future Enhancements
 
-## Skybox Standalone Viewer (Companion Application)
+- Implement real AI integration for more sophisticated ASCII art generation
+- Add more video effects and processing options
+- Improve performance for longer videos and higher resolutions
 
-### Features
 
-- Fullscreen mode
-- Auto-rotate functionality
-- Reset view option
-- Zoom controls
+## Credits
 
-### Usage
+Created by HAx0rGurl aka Abandoned Muse
 
-1. Open SkyboxStandAloneViewer.html in a web browser.
-2. Use the provided controls to interact with the 360-degree environment.
-3. Click the Fullscreen button for an immersive view.
+## License
 
-## Comparison
-
-- Web App: More features, custom uploads, HUD toggle
-- Standalone Viewer: Lightweight, essential controls, zoom functionality
-
-## Requirements
-
-Both applications require a modern web browser with JavaScript enabled.
-
-## Controls
-
-### Web App
-
-- Fullscreen: 'F' key
-- Exit Fullscreen: 'Esc' key
-- Look Around: Mouse/touch input
-- Auto Rotate, Reset View, Toggle HUD: On-screen buttons
-
-### Standalone Viewer
-
-- Fullscreen, Auto Rotate, Reset View: On-screen buttons
-- Zoom In/Out: Dedicated buttons
-
-[Enjoy the app? Wanna buy me a coffee](https://www.paypal.com/paypalme/musephotos)
+GPL 3.0 License
