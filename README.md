@@ -1,6 +1,6 @@
 # video2ascii
 
-Welcome to the Video to Ascii! This web-based application offers a unique blend of video processing and AI-generated ASCII art, providing users with a creative platform for digital art experimentation.
+Welcome to the Video to Ascii! This is a work in progress but it works. It outputs your small videos in webm format. This web-based application offers unique video processing, providing users with a creative platform for digital art experimentation.
 You can use it here without downloading the code:
 https://hax0rgurl.github.io/video2ascii/
 
@@ -33,6 +33,7 @@ https://hax0rgurl.github.io/video2ascii/
 ## How to Use
 
 1. Video to ASCII Converter:
+
    - Upload an MP4 file using the file input
    - Adjust settings as desired
    - Click "Convert to ASCII" to process the video
@@ -55,7 +56,6 @@ https://hax0rgurl.github.io/video2ascii/
 - Add more video effects and processing options
 - Improve performance for longer videos and higher resolutions
 
-
 ## Credits
 
 Created by HAx0rGurl aka Abandoned Muse
@@ -63,3 +63,6 @@ Created by HAx0rGurl aka Abandoned Muse
 ## License
 
 GPL 3.0 License
+Thanks to @api on Websim for help with the code
+
+[Enjoy the app? Wanna buy me a coffee](https://www.paypal.com/paypalme/musephotos)
