@@ -1,545 +1,202 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mp4 Video 2 Ascii Converter</title>
-    <style>
-      body {
-        font-family: "Courier New", monospace;
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 20px;
-        background-color: #000000;
-        color: #00ff00;
-      }
-      #video-container,
-      #canvas-container {
-        margin-top: 20px;
-        text-align: center;
-      }
-      canvas {
-        border: 1px solid #00ff00;
-        max-width: 100%;
-      }
-      #loading {
-        display: none;
-        text-align: center;
-        margin-top: 20px;
-      }
-      .controls {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 20px;
-      }
-      input,
-      button,
-      select {
-        margin: 5px;
-        padding: 5px;
-        background-color: #000000;
-        color: #00ff00;
-        border: 1px solid #00ff00;
-      }
-      #error {
-        color: #ff0000;
-        margin-top: 10px;
-      }
-      h1 {
-        text-align: center;
-        text-shadow: 0 0 10px #00ff00;
-      }
-      label {
-        color: #00ff00;
-      }
-      button {
-        cursor: pointer;
-        transition: all 0.3s ease;
-      }
-      button:hover {
-        background-color: #00ff00;
-        color: #000000;
-      }
-      button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      #asciiCanvas {
-        background-color: #000000;
-      }
-      .module {
-        border: 1px solid #00ff00;
-        padding: 10px;
-        margin-top: 20px;
-      }
-      .module h2 {
-        color: #00ff00;
-        border-bottom: 1px solid #00ff00;
-        padding-bottom: 5px;
-      }
-      #aiGeneratedArt {
-        white-space: pre;
-        font-family: monospace;
-        line-height: 1;
-        overflow: auto;
-        max-height: 500px;
-        background-color: #000000;
-        color: #00ff00;
-        padding: 10px;
-        border: 1px solid #00ff00;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>Video to ASCII Converter</h1>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video2ASCII Pro</title>
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      color: #0f0;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    h1 { margin: 1em 0 0.5em; color: #0f0; }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5em;
+    }
+    label { font-size: 0.9em; color: #0f0; }
+    input, select, button {
+      background: #111;
+      color: #0f0;
+      border: 1px solid #0f0;
+      font-family: monospace;
+      padding: 0.4em 0.6em;
+    }
+    button:hover, select:hover, input:hover { background: #0f0; color: #000; }
+    .display {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 1em;
+      margin-top: 1em;
+      width: 95vw;
+      max-width: 1200px;
+    }
+    video, pre {
+      background: #000;
+      max-width: 45%;
+      border: 1px solid #0f0;
+    }
+    pre {
+      white-space: pre;
+      line-height: 0.6em;
+      font-size: 10px;
+      overflow: hidden;
+      text-align: center;
+      flex: 1;
+      padding: 0.5em;
+    }
+    #progress { color: #0f0; font-size: 0.9em; margin-top: 0.5em; }
+  </style>
+</head>
+<body>
+  <h1>🎬 Video → ASCII (Enhanced)</h1>
 
-    <!-- Existing Video to ASCII Converter -->
-    <div class="module">
-      <h2>Video to ASCII Converter</h2>
-      <input type="file" id="fileInput" accept="video/mp4" />
-      <div id="video-container"></div>
-      <div id="canvas-container">
-        <canvas id="asciiCanvas"></canvas>
-      </div>
-      <div class="controls">
-        <div>
-          <input
-            type="number"
-            id="fontSizeInput"
-            value="10"
-            min="1"
-            max="20"
-            step="1"
-          />
-          <label for="fontSizeInput">Font Size</label>
-        </div>
-        <div>
-          <input
-            type="number"
-            id="fpsInput"
-            value="24"
-            min="1"
-            max="60"
-            step="1"
-          />
-          <label for="fpsInput">FPS</label>
-        </div>
-        <div>
-          <input type="checkbox" id="colorCheckbox" />
-          <label for="colorCheckbox">Color</label>
-        </div>
-        <div>
-          <select id="asciiCharSet">
-            <option value="standard">Standard</option>
-            <option value="extended">Extended</option>
-            <option value="custom">Custom</option>
-          </select>
-          <label for="asciiCharSet">ASCII Character Set</label>
-        </div>
-        <div>
-          <input
-            type="text"
-            id="customAsciiChars"
-            placeholder="Custom ASCII chars"
-          />
-        </div>
-        <div>
-          <label for="colorScheme">Color Scheme:</label>
-          <select id="colorScheme">
-            <option value="matrix">Matrix Green</option>
-            <option value="cyberpunk">Cyberpunk Neon</option>
-            <option value="retro">Retro Computer</option>
-            <option value="pastel">Soft Pastel</option>
-            <option value="rainbow">Rainbow</option>
-          </select>
-        </div>
-        <div>
-          <label for="backgroundColor">Background Color:</label>
-          <input type="color" id="backgroundColor" value="#000000" />
-        </div>
-        <div>
-          <label for="textColor">Text Color:</label>
-          <input type="color" id="textColor" value="#00FF00" />
-        </div>
-        <div>
-          <button id="convertButton">Convert to ASCII</button>
-          <button id="exportButton" disabled="">Export MP4</button>
-        </div>
+  <div class="controls">
+    <input type="file" id="file" accept="video/mp4,video/webm">
+    <label>Width: <input type="number" id="width" value="100" min="40" max="200"></label>
+    <label>FPS: <input type="number" id="fps" value="15" min="5" max="60"></label>
+    <label>Font size: <input type="number" id="fontsize" value="10" min="6" max="20"></label>
+    <label>Color:
+      <select id="color">
+        <option value="#0f0">Matrix Green</option>
+        <option value="#fff">White</option>
+        <option value="#f0f">Cyberpunk Pink</option>
+        <option value="#0ff">Cyberpunk Blue</option>
+        <option value="#f80">Retro Amber</option>
+      </select>
+    </label>
+    <button id="startBtn">Convert</button>
+    <button id="recordBtn">Record ASCII</button>
+    <button id="stopBtn">Stop</button>
+  </div>
 
-        <!-- New features -->
-        <div>
-          <label for="resolutionSelect">Output Resolution:</label>
-          <select id="resolutionSelect">
-            <option value="480p">480p</option>
-            <option value="720p">720p</option>
-            <option value="1080p">1080p</option>
-          </select>
-        </div>
-        <div>
-          <label for="effectSelect">Special Effect:</label>
-          <select id="effectSelect">
-            <option value="none">None</option>
-            <option value="matrix">Matrix Rain</option>
-            <option value="glitch">Glitch</option>
-            <option value="oldTV">Old TV</option>
-          </select>
-        </div>
-        <div>
-          <label for="audioToggle">Keep Original Audio:</label>
-          <input type="checkbox" id="audioToggle" checked="" />
-        </div>
-      </div>
-    </div>
+  <div class="display">
+    <video id="video" controls></video>
+    <pre id="ascii"></pre>
+  </div>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <p id="progress"></p>
 
-    <!-- New AI ASCII Art Generator Module -->
-    <div class="module">
-      <h2>AI ASCII Art Generator</h2>
-      <div class="controls">
-        <input
-          type="text"
-          id="promptInput"
-          placeholder="Enter your prompt here"
-        />
-        <select id="artStyle">
-          <option value="default">Default</option>
-          <option value="minimalist">Minimalist</option>
-          <option value="detailed">Detailed</option>
-        </select>
-        <button id="generateArtButton">Generate ASCII Art</button>
-      </div>
-      <div id="aiGeneratedArt"></div>
-    </div>
+  <script>
+    const fileInput = document.getElementById('file');
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const asciiDisplay = document.getElementById('ascii');
+    const progress = document.getElementById('progress');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const recordBtn = document.getElementById('recordBtn');
+    const widthInput = document.getElementById('width');
+    const fpsInput = document.getElementById('fps');
+    const fontInput = document.getElementById('fontsize');
+    const colorInput = document.getElementById('color');
 
-    <div id="loading">Processing... Please wait.</div>
-    <div id="error"></div>
+    const chars = "@#8&$%WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
+    let running = false;
+    let recorder = null;
+    let chunks = [];
+    let asciiStream = null;
+    let drawInterval = null;
 
-    <script>
-      // Existing code
-      const fileInput = document.getElementById("fileInput");
-      const videoContainer = document.getElementById("video-container");
-      const canvas = document.getElementById("asciiCanvas");
-      const ctx = canvas.getContext("2d");
-      const fontSizeInput = document.getElementById("fontSizeInput");
-      const fpsInput = document.getElementById("fpsInput");
-      const colorCheckbox = document.getElementById("colorCheckbox");
-      const asciiCharSetSelect = document.getElementById("asciiCharSet");
-      const customAsciiCharsInput = document.getElementById("customAsciiChars");
-      const convertButton = document.getElementById("convertButton");
-      const exportButton = document.getElementById("exportButton");
-      const loadingDiv = document.getElementById("loading");
-      const errorDiv = document.getElementById("error");
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      video.src = URL.createObjectURL(file);
+      video.load();
+      progress.textContent = '';
+    });
 
-      let video, asciiFrames, mediaRecorder, recordedChunks;
+    startBtn.addEventListener('click', () => {
+      if (!video.src) return alert("Load a video first.");
+      running = true;
+      video.play();
+      startASCII();
+    });
 
-      const ASCII_CHAR_SETS = {
-        standard: ["@", "#", "S", "%", "?", "*", "+", ";", ":", ",", "."],
-        extended: [
-          "$",
-          "@",
-          "B",
-          "%",
-          "8",
-          "&",
-          "W",
-          "M",
-          "#",
-          "*",
-          "o",
-          "a",
-          "h",
-          "k",
-          "b",
-          "d",
-          "p",
-          "q",
-          "w",
-          "m",
-          "Z",
-          "O",
-          "0",
-          "Q",
-          "L",
-          "C",
-          "J",
-          "U",
-          "Y",
-          "X",
-          "z",
-          "c",
-          "v",
-          "u",
-          "n",
-          "x",
-          "r",
-          "j",
-          "f",
-          "t",
-          "/",
-          "\\",
-          "|",
-          "(",
-          ")",
-          "1",
-          "{",
-          "}",
-          "[",
-          "]",
-          "?",
-          "-",
-          "_",
-          "+",
-          "~",
-          "<",
-          ">",
-          "i",
-          "!",
-          "l",
-          "I",
-          ";",
-          ":",
-          ",",
-          '"',
-          "^",
-          "`",
-          "'",
-          ".",
-          " ",
-        ],
-      };
+    stopBtn.addEventListener('click', () => {
+      running = false;
+      cancelAnimationFrame(drawInterval);
+      if (recorder && recorder.state === "recording") recorder.stop();
+      video.pause();
+      progress.textContent = 'Stopped.';
+    });
 
-      fileInput.addEventListener("change", handleFileSelect);
-      convertButton.addEventListener("click", convertToAscii);
-      exportButton.addEventListener("click", exportMP4);
-      asciiCharSetSelect.addEventListener("change", toggleCustomCharsInput);
+    function startASCII() {
+      const targetWidth = parseInt(widthInput.value);
+      const fontSize = parseInt(fontInput.value);
+      const fps = parseInt(fpsInput.value);
+      asciiDisplay.style.fontSize = fontSize + "px";
+      asciiDisplay.style.color = colorInput.value;
 
-      function toggleCustomCharsInput() {
-        customAsciiCharsInput.style.display =
-          asciiCharSetSelect.value === "custom" ? "inline" : "none";
+      canvas.width = targetWidth;
+      const ratio = video.videoHeight / video.videoWidth;
+      canvas.height = Math.floor(targetWidth * ratio / 2);
+
+      const frameDelay = 1000 / fps;
+
+      function render() {
+        if (!running || video.paused || video.ended) return;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        asciiDisplay.textContent = frameToASCII(frame);
+        drawInterval = setTimeout(() => requestAnimationFrame(render), frameDelay);
       }
+      render();
+    }
 
-      function handleFileSelect(event) {
-        const file = event.target.files[0];
-        const videoURL = URL.createObjectURL(file);
-        video = document.createElement("video");
-        video.src = videoURL;
-        video.controls = true;
-        videoContainer.innerHTML = "";
-        videoContainer.appendChild(video);
-        convertButton.disabled = false;
-      }
-
-      async function convertToAscii() {
-        showLoading(true);
-        asciiFrames = [];
-        const fontSize = parseInt(fontSizeInput.value);
-        const fps = parseInt(fpsInput.value);
-        const useColor = colorCheckbox.checked;
-        const asciiChars = getAsciiChars();
-
-        video.currentTime = 0;
-        const frameCount = Math.floor(video.duration * fps);
-        const frameInterval = 1 / fps;
-
-        for (let i = 0; i < frameCount; i++) {
-          video.currentTime = i * frameInterval;
-          await new Promise((resolve) => (video.onseeked = resolve));
-          const asciiFrame = videoFrameToAscii(
-            video,
-            fontSize,
-            useColor,
-            asciiChars
-          );
-          asciiFrames.push(asciiFrame);
+    function frameToASCII(frame) {
+      const pixels = frame.data;
+      const w = frame.width;
+      const h = frame.height;
+      let ascii = '';
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const offset = (y * w + x) * 4;
+          const r = pixels[offset];
+          const g = pixels[offset + 1];
+          const b = pixels[offset + 2];
+          const brightness = (0.299*r + 0.587*g + 0.114*b) / 255;
+          const charIndex = Math.floor((1 - brightness) * (chars.length - 1));
+          ascii += chars[charIndex];
         }
-
-        showLoading(false);
-        exportButton.disabled = false;
+        ascii += '\n';
       }
+      return ascii;
+    }
 
-      function getAsciiChars() {
-        const selectedSet = asciiCharSetSelect.value;
-        if (selectedSet === "custom") {
-          return customAsciiCharsInput.value.split("");
-        }
-        return ASCII_CHAR_SETS[selectedSet];
-      }
+    recordBtn.addEventListener('click', () => {
+      if (recorder && recorder.state === "recording") return;
+      asciiStream = asciiDisplay.captureStream(parseInt(fpsInput.value));
+      recorder = new MediaRecorder(asciiStream, { mimeType: "video/webm" });
+      chunks = [];
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = saveRecording;
+      recorder.start();
+      progress.textContent = "Recording ASCII output...";
+      setTimeout(() => {
+        if (recorder && recorder.state === "recording") recorder.stop();
+      }, 10000); // auto-stop after 10s
+    });
 
-      function videoFrameToAscii(video, fontSize, useColor, asciiChars) {
-        const tempCanvas = document.createElement("canvas");
-        const tempCtx = tempCanvas.getContext("2d");
-        tempCanvas.width = video.videoWidth;
-        tempCanvas.height = video.videoHeight;
-        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-
-        const imageData = tempCtx.getImageData(
-          0,
-          0,
-          tempCanvas.width,
-          tempCanvas.height
-        );
-        const asciiFrame = [];
-
-        for (let y = 0; y < tempCanvas.height; y += fontSize) {
-          for (let x = 0; x < tempCanvas.width; x += fontSize / 2) {
-            const pixelIndex = (y * tempCanvas.width + x) * 4;
-            const r = imageData.data[pixelIndex];
-            const g = imageData.data[pixelIndex + 1];
-            const b = imageData.data[pixelIndex + 2];
-            const brightness = (r + g + b) / 3;
-            const charIndex = Math.floor(
-              (brightness / 255) * (asciiChars.length - 1)
-            );
-            const asciiChar = asciiChars[charIndex];
-            asciiFrame.push({
-              char: asciiChar,
-              color: useColor ? `rgb(${r},${g},${b})` : "#00FF00",
-            });
-          }
-          asciiFrame.push("\n");
-        }
-
-        return asciiFrame;
-      }
-
-      async function exportMP4() {
-        showLoading(true);
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const fontSize = parseInt(fontSizeInput.value);
-        const fps = parseInt(fpsInput.value);
-
-        const stream = canvas.captureStream(fps);
-        const options = { mimeType: "video/webm;codecs=vp9" };
-        mediaRecorder = new MediaRecorder(stream, options);
-        recordedChunks = [];
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            recordedChunks.push(event.data);
-          }
-        };
-
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(recordedChunks, { type: "video/webm" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "ascii_video.webm";
-          a.click();
-          URL.revokeObjectURL(url);
-          showLoading(false);
-        };
-
-        mediaRecorder.start();
-
-        for (const frame of asciiFrames) {
-          drawAsciiFrame(frame, fontSize);
-          await new Promise((resolve) => requestAnimationFrame(resolve));
-        }
-
-        mediaRecorder.stop();
-      }
-
-      function drawAsciiFrame(asciiChars, fontSize) {
-        ctx.fillStyle = "#000000";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = `${fontSize}px 'Courier New', monospace`;
-        ctx.textBaseline = "top";
-
-        let x = 0;
-        let y = 0;
-
-        for (const char of asciiChars) {
-          if (char === "\n") {
-            x = 0;
-            y += fontSize;
-          } else {
-            ctx.fillStyle = char.color;
-            ctx.fillText(char.char, x, y);
-            x += fontSize / 2;
-          }
-        }
-      }
-
-      function showLoading(show) {
-        loadingDiv.style.display = show ? "block" : "none";
-      }
-
-      function showError(message) {
-        errorDiv.textContent = message;
-      }
-
-      toggleCustomCharsInput();
-
-      // New AI ASCII Art Generator Module
-      const promptInput = document.getElementById("promptInput");
-      const artStyle = document.getElementById("artStyle");
-      const generateArtButton = document.getElementById("generateArtButton");
-      const aiGeneratedArt = document.getElementById("aiGeneratedArt");
-
-      generateArtButton.addEventListener("click", generateAIArt);
-
-      async function generateAIArt() {
-        const prompt = promptInput.value;
-        const style = artStyle.value;
-
-        if (!prompt) {
-          showError("Please enter a prompt for the AI art generator.");
-          return;
-        }
-
-        showLoading(true);
-
-        try {
-          // Simulating AI generation with a simple ASCII art generator
-          const art = await simulateAIArtGeneration(prompt, style);
-          aiGeneratedArt.textContent = art;
-        } catch (error) {
-          showError("Error generating AI art: " + error.message);
-        } finally {
-          showLoading(false);
-        }
-      }
-
-      async function simulateAIArtGeneration(prompt, style) {
-        // This is a placeholder function. In a real implementation, you would call an AI service here.
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulate processing time
-
-        const artStyles = {
-          default: [
-            "  .---.  ",
-            " /_____\\ ",
-            "( '   ' )",
-            "(  (O)  )",
-            " |  |  | ",
-            " |__|__| ",
-            "/",
-          ],
-          minimalist: [" ___ ", "|   |", "|___|", "  |  ", "  |  "],
-          detailed: [
-            "    ____    ",
-            '  ."    ".  ',
-            ' /  .-""-.\\ ',
-            "/  /      \\ \\",
-            "|  |  0  0| |",
-            "|  |   <  | |",
-            "|  |  \\__/| |",
-            "\\  \\______/ /",
-            " \\________/ ",
-          ],
-        };
-
-        const baseArt = artStyles[style] || artStyles.default;
-
-        // Add the prompt to the art
-        const art = [...baseArt, "", `"${prompt}"`];
-
-        return art.join("\n");
-      }
-
-      // Debug
-      console.log("ASCII Art Studio initialized successfully.");
-    </script>
-  </body>
+    function saveRecording() {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "ascii_video.webm";
+      a.click();
+      progress.textContent = "Recording saved: ascii_video.webm";
+    }
+  </script>
+</body>
 </html>
