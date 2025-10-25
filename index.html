@@ -1,202 +1,174 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Video2ASCII Pro</title>
-  <style>
-    body {
-      margin: 0;
-      background: #000;
-      color: #0f0;
-      font-family: monospace;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-    }
-    h1 { margin: 1em 0 0.5em; color: #0f0; }
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 0.5em;
-    }
-    label { font-size: 0.9em; color: #0f0; }
-    input, select, button {
-      background: #111;
-      color: #0f0;
-      border: 1px solid #0f0;
-      font-family: monospace;
-      padding: 0.4em 0.6em;
-    }
-    button:hover, select:hover, input:hover { background: #0f0; color: #000; }
-    .display {
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      gap: 1em;
-      margin-top: 1em;
-      width: 95vw;
-      max-width: 1200px;
-    }
-    video, pre {
-      background: #000;
-      max-width: 45%;
-      border: 1px solid #0f0;
-    }
-    pre {
-      white-space: pre;
-      line-height: 0.6em;
-      font-size: 10px;
-      overflow: hidden;
-      text-align: center;
-      flex: 1;
-      padding: 0.5em;
-    }
-    #progress { color: #0f0; font-size: 0.9em; margin-top: 0.5em; }
-  </style>
+<meta charset="UTF-8">
+<title>Video2ASCII — Final Local Build</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<style>
+  body {
+    background:#000;
+    color:#0f0;
+    font-family:monospace;
+    text-align:center;
+    margin:0;
+    padding:1em;
+  }
+  h1{margin:0.2em 0;}
+  .controls{
+    display:flex;flex-wrap:wrap;justify-content:center;gap:0.5em;margin-bottom:1em;
+  }
+  label{color:#0f0;}
+  input,select,button{
+    background:#111;color:#0f0;border:1px solid #0f0;
+    font-family:monospace;padding:0.3em 0.6em;
+  }
+  button:hover,input:hover,select:hover{background:#0f0;color:#000;}
+  video{max-width:45%;border:1px solid #0f0;}
+  pre{
+    display:inline-block;background:#000;color:#0f0;border:1px solid #0f0;
+    white-space:pre;line-height:0.6em;font-size:10px;text-align:center;
+    overflow:hidden;max-width:45%;
+  }
+  .display{display:flex;justify-content:center;align-items:flex-start;gap:1em;flex-wrap:wrap;}
+  #status{margin-top:0.5em;color:#0f0;}
+</style>
 </head>
 <body>
-  <h1>🎬 Video → ASCII (Enhanced)</h1>
+<h1>🎥 Video → ASCII</h1>
 
-  <div class="controls">
-    <input type="file" id="file" accept="video/mp4,video/webm">
-    <label>Width: <input type="number" id="width" value="100" min="40" max="200"></label>
-    <label>FPS: <input type="number" id="fps" value="15" min="5" max="60"></label>
-    <label>Font size: <input type="number" id="fontsize" value="10" min="6" max="20"></label>
-    <label>Color:
-      <select id="color">
-        <option value="#0f0">Matrix Green</option>
-        <option value="#fff">White</option>
-        <option value="#f0f">Cyberpunk Pink</option>
-        <option value="#0ff">Cyberpunk Blue</option>
-        <option value="#f80">Retro Amber</option>
-      </select>
-    </label>
-    <button id="startBtn">Convert</button>
-    <button id="recordBtn">Record ASCII</button>
-    <button id="stopBtn">Stop</button>
-  </div>
+<div class="controls">
+  <input type="file" id="file" accept="video/mp4,video/webm">
+  <label>Width:<input type="number" id="width" value="100" min="40" max="200"></label>
+  <label>FPS:<input type="number" id="fps" value="15" min="5" max="60"></label>
+  <label>Font:<input type="number" id="fontsize" value="10" min="6" max="20"></label>
+  <label>Color Scheme:
+    <select id="scheme">
+      <option value="matrix">Matrix Green</option>
+      <option value="cyber">Cyberpunk Neon</option>
+      <option value="amber">Retro Amber</option>
+      <option value="pastel">Soft Pastel</option>
+      <option value="rainbow">Rainbow</option>
+    </select>
+  </label>
+  <label>BG:<input type="color" id="bg" value="#000000"></label>
+  <label>Text:<input type="color" id="txt" value="#00ff00"></label>
+  <label>Effect:
+    <select id="fx">
+      <option value="none">None</option>
+      <option value="matrix">Matrix Rain</option>
+      <option value="glitch">Glitch</option>
+      <option value="oldtv">Old TV</option>
+    </select>
+  </label>
+  <button id="start">Convert</button>
+  <button id="record">Record</button>
+  <button id="stop">Stop</button>
+</div>
 
-  <div class="display">
-    <video id="video" controls></video>
-    <pre id="ascii"></pre>
-  </div>
-  <canvas id="canvas" style="display:none;"></canvas>
-  <p id="progress"></p>
+<div class="display">
+  <video id="video" controls></video>
+  <pre id="ascii"></pre>
+</div>
+<canvas id="canvas" style="display:none;"></canvas>
+<p id="status"></p>
 
-  <script>
-    const fileInput = document.getElementById('file');
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const asciiDisplay = document.getElementById('ascii');
-    const progress = document.getElementById('progress');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const recordBtn = document.getElementById('recordBtn');
-    const widthInput = document.getElementById('width');
-    const fpsInput = document.getElementById('fps');
-    const fontInput = document.getElementById('fontsize');
-    const colorInput = document.getElementById('color');
+<!-- ffmpeg.wasm CDN -->
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.4/dist/ffmpeg.min.js"></script>
 
-    const chars = "@#8&$%WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
-    let running = false;
-    let recorder = null;
-    let chunks = [];
-    let asciiStream = null;
-    let drawInterval = null;
+<script>
+const chars="@#8&$%WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
+const file=document.getElementById('file');
+const vid=document.getElementById('video');
+const can=document.getElementById('canvas');
+const ctx=can.getContext('2d');
+const asciiOut=document.getElementById('ascii');
+const start=document.getElementById('start');
+const stop=document.getElementById('stop');
+const recBtn=document.getElementById('record');
+const status=document.getElementById('status');
 
-    fileInput.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      video.src = URL.createObjectURL(file);
-      video.load();
-      progress.textContent = '';
-    });
+let running=false, recorder=null, chunks=[], stream=null;
 
-    startBtn.addEventListener('click', () => {
-      if (!video.src) return alert("Load a video first.");
-      running = true;
-      video.play();
-      startASCII();
-    });
+file.onchange=e=>{
+  const f=e.target.files[0];
+  if(f){vid.src=URL.createObjectURL(f);vid.load();status.textContent="Video loaded";}
+};
 
-    stopBtn.addEventListener('click', () => {
-      running = false;
-      cancelAnimationFrame(drawInterval);
-      if (recorder && recorder.state === "recording") recorder.stop();
-      video.pause();
-      progress.textContent = 'Stopped.';
-    });
+start.onclick=()=>{if(!vid.src)return alert("Load a video");running=true;vid.play();renderLoop();};
 
-    function startASCII() {
-      const targetWidth = parseInt(widthInput.value);
-      const fontSize = parseInt(fontInput.value);
-      const fps = parseInt(fpsInput.value);
-      asciiDisplay.style.fontSize = fontSize + "px";
-      asciiDisplay.style.color = colorInput.value;
+stop.onclick=()=>{
+  running=false;vid.pause();cancelAnimationFrame(renderLoop);
+  if(recorder&&recorder.state==="recording")recorder.stop();
+  status.textContent="Stopped.";
+};
 
-      canvas.width = targetWidth;
-      const ratio = video.videoHeight / video.videoWidth;
-      canvas.height = Math.floor(targetWidth * ratio / 2);
+function renderLoop(){
+  if(!running||vid.paused||vid.ended)return;
+  const width=parseInt(width.value);
+  const font=parseInt(fontsize.value);
+  const fps=parseInt(fps.value);
+  asciiOut.style.fontSize=font+"px";
+  asciiOut.style.background=bg.value;
+  asciiOut.style.color=txt.value;
 
-      const frameDelay = 1000 / fps;
+  can.width=width;
+  const ratio=vid.videoHeight/vid.videoWidth;
+  can.height=Math.floor(width*ratio/2);
 
-      function render() {
-        if (!running || video.paused || video.ended) return;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        asciiDisplay.textContent = frameToASCII(frame);
-        drawInterval = setTimeout(() => requestAnimationFrame(render), frameDelay);
-      }
-      render();
+  ctx.drawImage(vid,0,0,can.width,can.height);
+  const frame=ctx.getImageData(0,0,can.width,can.height);
+  asciiOut.textContent=frameToASCII(frame);
+  setTimeout(()=>requestAnimationFrame(renderLoop),1000/fps);
+}
+
+function frameToASCII(frame){
+  const p=frame.data,w=frame.width,h=frame.height;let out="";
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const i=(y*w+x)*4;
+      const r=p[i],g=p[i+1],b=p[i+2];
+      const bright=(0.299*r+0.587*g+0.114*b)/255;
+      const idx=Math.floor((1-bright)*(chars.length-1));
+      out+=chars[idx];
     }
+    out+="\n";
+  }
+  return out;
+}
 
-    function frameToASCII(frame) {
-      const pixels = frame.data;
-      const w = frame.width;
-      const h = frame.height;
-      let ascii = '';
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const offset = (y * w + x) * 4;
-          const r = pixels[offset];
-          const g = pixels[offset + 1];
-          const b = pixels[offset + 2];
-          const brightness = (0.299*r + 0.587*g + 0.114*b) / 255;
-          const charIndex = Math.floor((1 - brightness) * (chars.length - 1));
-          ascii += chars[charIndex];
-        }
-        ascii += '\n';
-      }
-      return ascii;
-    }
+// Recording
+recBtn.onclick=async()=>{
+  if(!running)start.click();
+  if(recorder&&recorder.state==="recording")return;
+  stream=asciiOut.captureStream(parseInt(fps.value));
+  recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
+  chunks=[];
+  recorder.ondataavailable=e=>chunks.push(e.data);
+  recorder.onstop=saveRecording;
+  recorder.start();
+  status.textContent="Recording ASCII...";
+  vid.onended=()=>recorder.stop();
+};
 
-    recordBtn.addEventListener('click', () => {
-      if (recorder && recorder.state === "recording") return;
-      asciiStream = asciiDisplay.captureStream(parseInt(fpsInput.value));
-      recorder = new MediaRecorder(asciiStream, { mimeType: "video/webm" });
-      chunks = [];
-      recorder.ondataavailable = e => chunks.push(e.data);
-      recorder.onstop = saveRecording;
-      recorder.start();
-      progress.textContent = "Recording ASCII output...";
-      setTimeout(() => {
-        if (recorder && recorder.state === "recording") recorder.stop();
-      }, 10000); // auto-stop after 10s
-    });
+// Save .webm and optionally convert to .mp4
+async function saveRecording(){
+  const blob=new Blob(chunks,{type:"video/webm"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download="ascii_video.webm";a.click();
+  status.textContent="Saved ascii_video.webm";
 
-    function saveRecording() {
-      const blob = new Blob(chunks, { type: "video/webm" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "ascii_video.webm";
-      a.click();
-      progress.textContent = "Recording saved: ascii_video.webm";
-    }
-  </script>
+  // Optional MP4 conversion
+  const ffmpeg=FFmpeg.createFFmpeg({log:false});
+  await ffmpeg.load();
+  await ffmpeg.FS('writeFile','input.webm',await fetchFile(blob));
+  await ffmpeg.run('-i','input.webm','-c:v','libx264','output.mp4');
+  const data=ffmpeg.FS('readFile','output.mp4');
+  const mp4URL=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
+  const b=document.createElement('a');
+  b.href=mp4URL;b.download='ascii_video.mp4';b.click();
+  status.textContent+=" and ascii_video.mp4";
+}
+</script>
 </body>
 </html>
