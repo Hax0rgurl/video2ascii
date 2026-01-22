@@ -87,7 +87,15 @@ const stop=document.getElementById('stop');
 const recBtn=document.getElementById('record');
 const status=document.getElementById('status');
 
-let running=false, recorder=null, chunks=[], stream=null;
+let running=false, recorder=null, chunks=[], stream=null, ffmpeg=null;
+
+async function initFFmpeg(){
+  status.textContent="Loading FFmpeg...";
+  ffmpeg=FFmpeg.createFFmpeg({log:false});
+  await ffmpeg.load();
+  status.textContent="FFmpeg loaded. Ready to convert.";
+}
+initFFmpeg();
 
 file.onchange=e=>{
   const f=e.target.files[0];
@@ -159,9 +167,8 @@ async function saveRecording(){
   status.textContent="Saved ascii_video.webm";
 
   // Optional MP4 conversion
-  const ffmpeg=FFmpeg.createFFmpeg({log:false});
-  await ffmpeg.load();
-  await ffmpeg.FS('writeFile','input.webm',await fetchFile(blob));
+  if(!ffmpeg.isLoaded()) await ffmpeg.load();
+  await ffmpeg.FS('writeFile','input.webm',await FFmpeg.fetchFile(blob));
   await ffmpeg.run('-i','input.webm','-c:v','libx264','output.mp4');
   const data=ffmpeg.FS('readFile','output.mp4');
   const mp4URL=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
