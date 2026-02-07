@@ -13,7 +13,7 @@
     margin:0;
     padding:1em;
   }
-  h1{margin:0.2em 0;}
+  h1, h2{margin:0.2em 0;}
   .controls{
     display:flex;flex-wrap:wrap;justify-content:center;gap:0.5em;margin-bottom:1em;
   }
@@ -73,6 +73,20 @@
   <button id="stop">Stop</button>
 </div>
 
+<h2>🤖 AI ASCII Art Generator</h2>
+<div class="controls">
+  <input type="text" id="ai-prompt" placeholder="Enter text prompt..." style="width: 200px;">
+  <select id="ai-style">
+    <option value="">Default Style</option>
+    <option value="minimalist line art">Minimalist</option>
+    <option value="highly detailed, intricate">Detailed</option>
+    <option value="cyberpunk, neon">Cyberpunk</option>
+    <option value="retro computer graphics, 8-bit">Retro</option>
+    <option value="sketch, pencil drawing">Sketch</option>
+  </select>
+  <button id="ai-generate">Generate AI Art</button>
+</div>
+
 <div class="display">
   <video id="video" controls></video>
   <pre id="ascii"></pre>
@@ -99,6 +113,18 @@ const stop=document.getElementById('stop');
 const recBtn=document.getElementById('record');
 const status=document.getElementById('status');
 
+// AI Elements
+const aiPrompt = document.getElementById('ai-prompt');
+const aiStyle = document.getElementById('ai-style');
+const aiGenerate = document.getElementById('ai-generate');
+
+// Controls for settings
+const widthInput = document.getElementById('width');
+const fpsInput = document.getElementById('fps');
+const fontInput = document.getElementById('fontsize');
+const bgInput = document.getElementById('bg');
+const txtInput = document.getElementById('txt');
+
 let running=false, recorder=null, chunks=[], stream=null;
 
 file.onchange=e=>{
@@ -109,19 +135,21 @@ file.onchange=e=>{
 start.onclick=()=>{if(!vid.src)return alert("Load a video");running=true;vid.play();renderLoop();};
 
 stop.onclick=()=>{
-  running=false;vid.pause();cancelAnimationFrame(renderLoop);
+  running=false;vid.pause();
   if(recorder&&recorder.state==="recording")recorder.stop();
   status.textContent="Stopped.";
 };
 
 function renderLoop(){
   if(!running||vid.paused||vid.ended)return;
-  const wInput = document.getElementById('width');
-  const widthVal=parseInt(wInput.value);
-  const font=parseInt(document.getElementById('fontsize').value);
-  const fps=parseInt(document.getElementById('fps').value);
+  const width=parseInt(widthInput.value);
+  const font=parseInt(fontInput.value);
+  const fps=parseInt(fpsInput.value);
+  asciiOut.style.fontSize=font+"px";
+  asciiOut.style.background=bgInput.value;
+  asciiOut.style.color=txtInput.value;
 
-  can.width=widthVal;
+  can.width=width;
   const ratio=vid.videoHeight/vid.videoWidth;
   can.height=Math.floor(widthVal*ratio/2);
 
@@ -187,24 +215,75 @@ function frameToASCII(frame){
   return out;
 }
 
+// AI Generation Logic
+aiGenerate.onclick = async () => {
+    const prompt = aiPrompt.value.trim();
+    if (!prompt) return alert("Please enter a prompt");
+
+    if (running) {
+         running = false;
+         vid.pause();
+    }
+
+    status.textContent = "Generating AI Image...";
+    asciiOut.textContent = "Generating...";
+
+    const style = aiStyle.value;
+    const finalPrompt = style ? `${prompt}, ${style}` : prompt;
+    const seed = Math.floor(Math.random() * 10000);
+    // Adding nologo to avoid watermarks messing up ASCII
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?seed=${seed}&nologo=true`;
+
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = imageUrl;
+
+    img.onload = () => {
+        status.textContent = "Processing ASCII...";
+
+        const width = parseInt(widthInput.value);
+        const font = parseInt(fontInput.value);
+
+        asciiOut.style.fontSize = font + "px";
+        asciiOut.style.background = bgInput.value;
+        asciiOut.style.color = txtInput.value;
+
+        const ratio = img.height / img.width;
+        can.width = width;
+        can.height = Math.floor(width * ratio / 2);
+
+        ctx.drawImage(img, 0, 0, can.width, can.height);
+        const frame = ctx.getImageData(0, 0, can.width, can.height);
+        asciiOut.textContent = frameToASCII(frame);
+
+        status.textContent = "AI Art Generated!";
+    };
+
+    img.onerror = () => {
+        status.textContent = "Error generating image.";
+        asciiOut.textContent = "Error loading image from AI service.";
+    };
+};
+
 // Recording
 recBtn.onclick=async()=>{
   if(!running)start.click();
   if(recorder&&recorder.state==="recording")return;
-
-  if (resolution.value === 'dynamic') {
-    resolution.value = '720p'; // Default to 720p for recording if dynamic
+  // This might fail if browser doesn't support captureStream on Pre
+  try {
+    stream=asciiOut.captureStream(parseInt(fpsInput.value));
+    recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
+    chunks=[];
+    recorder.ondataavailable=e=>chunks.push(e.data);
+    recorder.onstop=saveRecording;
+    recorder.start();
+    status.textContent="Recording ASCII...";
+    vid.onended=()=>recorder.stop();
+  } catch(e) {
+      console.error(e);
+      status.textContent = "Recording not supported on this browser.";
+      alert("Recording is not supported in this environment.");
   }
-
-  const fps = parseInt(document.getElementById('fps').value);
-  stream=asciiCanvas.captureStream(fps);
-  recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
-  chunks=[];
-  recorder.ondataavailable=e=>chunks.push(e.data);
-  recorder.onstop=saveRecording;
-  recorder.start();
-  status.textContent="Recording ASCII...";
-  vid.onended=()=>recorder.stop();
 };
 
 // Save .webm and optionally convert to .mp4
@@ -216,16 +295,20 @@ async function saveRecording(){
   status.textContent="Saved ascii_video.webm";
 
   // Optional MP4 conversion
-  const { createFFmpeg, fetchFile } = FFmpeg;
-  const ffmpeg=createFFmpeg({log:false});
-  await ffmpeg.load();
-  await ffmpeg.FS('writeFile','input.webm',await fetchFile(blob));
-  await ffmpeg.run('-i','input.webm','-c:v','libx264','output.mp4');
-  const data=ffmpeg.FS('readFile','output.mp4');
-  const mp4URL=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
-  const b=document.createElement('a');
-  b.href=mp4URL;b.download='ascii_video.mp4';b.click();
-  status.textContent+=" and ascii_video.mp4";
+  try {
+      if(typeof FFmpeg === 'undefined') throw new Error("FFmpeg not loaded");
+      const ffmpeg=FFmpeg.createFFmpeg({log:false});
+      await ffmpeg.load();
+      await ffmpeg.FS('writeFile','input.webm',await fetchFile(blob));
+      await ffmpeg.run('-i','input.webm','-c:v','libx264','output.mp4');
+      const data=ffmpeg.FS('readFile','output.mp4');
+      const mp4URL=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
+      const b=document.createElement('a');
+      b.href=mp4URL;b.download='ascii_video.mp4';b.click();
+      status.textContent+=" and ascii_video.mp4";
+  } catch(e) {
+      console.log("FFmpeg conversion failed or skipped:", e);
+  }
 }
 </script>
 </body>
