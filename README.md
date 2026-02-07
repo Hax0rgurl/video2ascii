@@ -22,13 +22,12 @@ https://hax0rgurl.github.io/video2ascii/
   - Place holder: Special effects (Matrix Rain, Glitch, Old TV)
   - Haven't been able to test it keeps crashing on long files: Option to keep original audio
 
-### 2. AI ASCII Art Generator(NOT WORKING)
+### 2. AI ASCII Art Generator
 
-- Generate ASCII art using AI based on text prompts
+- Generate ASCII art using AI based on text prompts (powered by Pollinations.ai)
 - Choose from different art styles:
   - Default
   - Minimalist
-  - Detailed
 
 ## How to Use
 
@@ -39,16 +38,16 @@ https://hax0rgurl.github.io/video2ascii/
    - Click "Convert to ASCII" to process the video
    - Once processed, click "Export MP4" to save the ASCII animation to your download folder.
 
-2. AI ASCII Art Generator: (STILL TO BE BUILT..SHOULD BE CONNECTED TO AN LLM)
+2. AI ASCII Art Generator:
    - Enter a text prompt in the input field
    - Select an art style from the dropdown menu
-   - Click "Generate ASCII Art" to create AI-generated ASCII art
+   - Click "Generate" to create AI-generated ASCII art
 
 ## Technical Details
 
 - Built using HTML, CSS, and JavaScript
 - Utilizes HTML5 Canvas for video processing and ASCII rendering
-- Simulates AI art generation (Note: This is a placeholder and would need to be replaced with an actual AI service in a production environment)
+- Integrates with Pollinations.ai for AI image generation
 
 ## Future Enhancements
 
