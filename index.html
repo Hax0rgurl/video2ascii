@@ -29,8 +29,17 @@
     white-space:pre;line-height:0.6em;font-size:10px;text-align:center;
     overflow:hidden;max-width:45%;
   }
+  #ascii-canvas {
+    display:block;background:#000;border:1px solid #0f0;max-width:45%;
+  }
   .display{display:flex;justify-content:center;align-items:flex-start;gap:1em;flex-wrap:wrap;}
   #status{margin-top:0.5em;color:#0f0;}
+  .rainbow {
+    background: linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8f00ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+  }
 </style>
 </head>
 <body>
@@ -48,6 +57,7 @@
       <option value="amber">Retro Amber</option>
       <option value="pastel">Soft Pastel</option>
       <option value="rainbow">Rainbow</option>
+      <option value="custom" hidden disabled>Custom</option>
     </select>
   </label>
   <label>BG:<input type="color" id="bg" value="#000000"></label>
@@ -60,11 +70,27 @@
       <option value="oldtv">Old TV</option>
     </select>
   </label>
+  <label>Resolution:
+    <select id="resolution">
+      <option value="dynamic">Window</option>
+      <option value="480p">480p</option>
+      <option value="720p">720p</option>
+      <option value="1080p">1080p</option>
+    </select>
+  </label>
   <button id="start">Convert</button>
   <button id="record">Record</button>
   <button id="stop">Stop</button>
 </div>
 
+<h2>AI ASCII Art Generator</h2>
+<div class="controls">
+  <input type="text" id="ai-prompt" placeholder="Enter prompt..." style="width: 300px;">
+  <select id="ai-style">
+    <option value="default">Default</option>
+    <option value="minimalist">Minimalist</option>
+  </select>
+  <button id="ai-generate">Generate</button>
 <h2>🤖 AI ASCII Art Generator</h2>
 <div class="controls">
   <input type="text" id="ai-prompt" placeholder="Enter text prompt..." style="width: 200px;">
@@ -77,6 +103,7 @@
     <option value="sketch, pencil drawing">Sketch</option>
   </select>
   <button id="ai-generate">Generate AI Art</button>
+  <button id="ai-download" style="display:none;">Download Text</button>
 </div>
 
 <div class="controls" id="ai-settings">
@@ -94,136 +121,66 @@
 
 <div class="display">
   <video id="video" controls></video>
+  <pre id="ascii" style="display:none;"></pre>
+  <canvas id="ascii-canvas"></canvas>
   <pre id="ascii"></pre>
+  <canvas id="ascii-canvas" style="display:none;"></canvas>
 </div>
 <canvas id="canvas" style="display:none;"></canvas>
+<canvas id="recording-canvas" style="display:none;"></canvas>
 <p id="status"></p>
 
 <!-- ffmpeg.wasm CDN -->
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.4/dist/ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
 
 <script>
+const { createFFmpeg, fetchFile } = FFmpeg;
 const chars="@#8&$%WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
 const file=document.getElementById('file');
 const vid=document.getElementById('video');
 const can=document.getElementById('canvas');
+const recordingCan=document.getElementById('recording-canvas');
 const ctx=can.getContext('2d');
+const recordingCtx=recordingCan.getContext('2d');
 const asciiOut=document.getElementById('ascii');
+const asciiCanvas=document.getElementById('ascii-canvas');
+const asciiCtx=asciiCanvas.getContext('2d');
+const resolution=document.getElementById('resolution');
 const start=document.getElementById('start');
 const stop=document.getElementById('stop');
 const recBtn=document.getElementById('record');
 const status=document.getElementById('status');
+const schemeSelect = document.getElementById('scheme');
+const bgInput = document.getElementById('bg');
+const txtInput = document.getElementById('txt');
+
+const schemes = {
+  matrix: { bg: "#000000", txt: "#00ff00" },
+  cyber: { bg: "#000000", txt: "#00ffff" },
+  amber: { bg: "#000000", txt: "#ffb000" },
+  pastel: { bg: "#282828", txt: "#ffb6c1" },
+  rainbow: { bg: "#000000", txt: "#ffffff" }
+};
+
+schemeSelect.onchange = () => {
+  const s = schemes[schemeSelect.value];
+  if (s) {
+    bgInput.value = s.bg;
+    txtInput.value = s.txt;
+  }
+};
+
+[bgInput, txtInput].forEach(el => {
+  el.addEventListener('input', () => {
+    schemeSelect.value = 'custom';
+  });
+});
 
 // AI Elements
 const aiPrompt = document.getElementById('ai-prompt');
 const aiStyle = document.getElementById('ai-style');
 const aiGenerate = document.getElementById('ai-generate');
-const aiProvider = document.getElementById('ai-provider');
-const aiApiKey = document.getElementById('ai-api-key');
-const aiEnhance = document.getElementById('ai-enhance');
-const aiStatusDetail = document.getElementById('ai-status-detail');
-
-function toggleApiKey() {
-    aiApiKey.style.display = (aiProvider.value === 'openai') ? 'inline-block' : 'none';
-}
-
-async function enhancePrompt(prompt, provider, apiKey) {
-    if (provider === 'mock') {
-        return "Mock Enhanced: " + prompt;
-    }
-
-    if (provider === 'pollinations') {
-        try {
-            const response = await fetch(`https://text.pollinations.ai/${encodeURIComponent("Enhance this image prompt: " + prompt)}`);
-            if (!response.ok) throw new Error("Pollinations Text API error: " + response.status);
-            const text = await response.text();
-            return text.trim();
-        } catch (e) {
-            console.warn("Pollinations text enhancement failed:", e);
-            aiStatusDetail.textContent = "Pollinations Text API failed, using original prompt.";
-            return prompt;
-        }
-    }
-
-    if (provider === 'openai') {
-        if (!apiKey) {
-            alert("Please enter an OpenAI API Key.");
-            throw new Error("Missing API Key");
-        }
-        try {
-            const response = await fetch("https://api.openai.com/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    model: "gpt-3.5-turbo",
-                    messages: [
-                        {role: "system", content: "You are an artistic prompt engineer. Rewrite the user's prompt to be more descriptive and suitable for an AI image generator. Output ONLY the enhanced prompt, no explanations."},
-                        {role: "user", content: prompt}
-                    ],
-                    max_tokens: 150
-                })
-            });
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error?.message || "OpenAI API error");
-            }
-            const data = await response.json();
-            return data.choices[0].message.content.trim();
-        } catch (e) {
-            console.error("OpenAI enhancement failed:", e);
-            aiStatusDetail.textContent = "OpenAI enhancement failed: " + e.message;
-            throw e;
-        }
-    }
-
-    return prompt;
-}
-
-async function generateImage(prompt, style, provider, apiKey) {
-    const finalPrompt = style ? `${prompt}, ${style}` : prompt;
-    const seed = Math.floor(Math.random() * 10000);
-
-    if (provider === 'mock') {
-        return `https://placehold.co/600x400/000000/00ff00?text=${encodeURIComponent(prompt.substring(0, 20))}`;
-    }
-
-    if (provider === 'pollinations') {
-        return `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?seed=${seed}&nologo=true`;
-    }
-
-    if (provider === 'openai') {
-        if (!apiKey) throw new Error("Missing API Key for OpenAI Image Generation");
-        try {
-            const response = await fetch("https://api.openai.com/v1/images/generations", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    prompt: finalPrompt,
-                    n: 1,
-                    size: "512x512",
-                    response_format: "url"
-                })
-            });
-            if (!response.ok) {
-                 const err = await response.json();
-                 throw new Error(err.error?.message || "OpenAI Image API error");
-            }
-            const data = await response.json();
-            return data.data[0].url;
-        } catch (e) {
-            console.error("OpenAI image generation failed:", e);
-            throw e;
-        }
-    }
-
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?seed=${seed}&nologo=true`;
-}
+const aiDownload = document.getElementById('ai-download');
 
 // Controls for settings
 const widthInput = document.getElementById('width');
@@ -231,8 +188,26 @@ const fpsInput = document.getElementById('fps');
 const fontInput = document.getElementById('fontsize');
 const bgInput = document.getElementById('bg');
 const txtInput = document.getElementById('txt');
+const keepAudio = document.getElementById('keep-audio');
 
 let running=false, recorder=null, chunks=[], stream=null;
+
+// Color Schemes
+const schemes = {
+  matrix: {bg:"#000000", txt:"#00ff00"},
+  cyber: {bg:"#000000", txt:"#00ffff"},
+  amber: {bg:"#000000", txt:"#ffb000"},
+  pastel: {bg:"#222222", txt:"#ffb6c1"},
+  rainbow: {bg:"#000000", txt:"#ffffff"} // Rainbow handled in render? For now just white.
+};
+
+document.getElementById('scheme').onchange = (e) => {
+  const s = schemes[e.target.value];
+  if(s){
+    document.getElementById('bg').value = s.bg;
+    document.getElementById('txt').value = s.txt;
+  }
+};
 
 file.onchange=e=>{
   const f=e.target.files[0];
@@ -247,23 +222,198 @@ stop.onclick=()=>{
   status.textContent="Stopped.";
 };
 
+let effectState = {
+  matrix: { drops: [] },
+  glitch: { timer: 0 },
+  oldtv: { offset: 0 }
+};
+
 function renderLoop(){
   if(!running||vid.paused||vid.ended)return;
+  const wVal=parseInt(document.getElementById('width').value);
+  const font=parseInt(document.getElementById('fontsize').value);
+  const fpsVal=parseInt(document.getElementById('fps').value);
+  const bgColor=document.getElementById('bg').value;
+  const txtColor=document.getElementById('txt').value;
+  const effect=document.getElementById('fx').value;
+
+  can.width=wVal;
+  const ratio=vid.videoHeight/vid.videoWidth;
+  can.height=Math.floor(wVal*ratio/2);
+
+  ctx.drawImage(vid,0,0,can.width,can.height);
+  const frame=ctx.getImageData(0,0,can.width,can.height);
+  const asciiText=frameToASCII(frame);
+
+  renderASCII(asciiText, wVal, font, bgColor, txtColor, effect);
+
+  setTimeout(()=>requestAnimationFrame(renderLoop),1000/fpsVal);
+}
+
+function renderASCII(text, cols, fontSize, bgColor, txtColor, effect) {
+  asciiCtx.font = fontSize + "px monospace";
+  asciiCtx.textBaseline = "top";
+  const metrics = asciiCtx.measureText("W");
+  const charW = metrics.width;
+  const charH = fontSize * 0.6;
+
+  const lines = text.split('\n');
+  const rows = lines.length;
+
+  const targetW = Math.ceil(cols * charW);
+  const targetH = Math.ceil(rows * charH);
+
+  if (asciiCanvas.width !== targetW || asciiCanvas.height !== targetH) {
+     asciiCanvas.width = targetW;
+     asciiCanvas.height = targetH;
+     // Reset font after resize
+     asciiCtx.font = fontSize + "px monospace";
+     asciiCtx.textBaseline = "top";
+  }
+
+  // Draw Background
+  asciiCtx.fillStyle = bgColor;
+  asciiCtx.fillRect(0, 0, asciiCanvas.width, asciiCanvas.height);
+
+  // Draw Text
+  asciiCtx.fillStyle = txtColor;
+  for (let i = 0; i < rows; i++) {
+    asciiCtx.fillText(lines[i], 0, i * charH);
+  }
+
+  // Apply Effects
+  if (effect === 'matrix') {
+     applyMatrixEffect(asciiCanvas.width, asciiCanvas.height, charW, charH);
+  } else if (effect === 'glitch') {
+     applyGlitchEffect(asciiCanvas.width, asciiCanvas.height);
+  } else if (effect === 'oldtv') {
+     applyOldTVEffect(asciiCanvas.width, asciiCanvas.height);
+  }
+}
+
+function applyMatrixEffect(w, h, charW, charH) {
+  const cols = Math.floor(w / charW);
+  if (effectState.matrix.drops.length !== cols) {
+      effectState.matrix.drops = new Array(cols).fill(0).map(() => Math.random() * h);
+  }
+
+  for (let i = 0; i < cols; i++) {
+      const x = i * charW;
+      const y = effectState.matrix.drops[i];
+
+      // Draw random katakana or char
+      const char = String.fromCharCode(0x30A0 + Math.random() * 96);
+
+      // Bright head
+      asciiCtx.fillStyle = '#fff';
+      asciiCtx.fillText(char, x, y);
+
+      // Trail
+      asciiCtx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+      asciiCtx.fillText(char, x, y - charH);
+
+      if (y > h && Math.random() > 0.975) {
+          effectState.matrix.drops[i] = 0;
+      } else {
+          effectState.matrix.drops[i] += charH;
+      }
+  }
+}
+
+function applyGlitchEffect(w, h) {
+  if (Math.random() < 0.1) {
+      const sliceH = Math.random() * 50 + 10;
+      const sliceY = Math.random() * h;
+      const offset = Math.random() * 20 - 10;
+
+      asciiCtx.drawImage(asciiCanvas, 0, sliceY, w, sliceH, offset, sliceY, w, sliceH);
+
+      if (Math.random() < 0.3) {
+          asciiCtx.globalCompositeOperation = 'difference';
+          asciiCtx.fillStyle = 'white';
+          asciiCtx.fillRect(0, sliceY, w, 5);
+          asciiCtx.globalCompositeOperation = 'source-over';
+      }
+  }
+}
+
+function applyOldTVEffect(w, h) {
+  // Scanlines
+  asciiCtx.fillStyle = "rgba(0,0,0,0.1)";
+  for (let y = 0; y < h; y += 4) {
+      asciiCtx.fillRect(0, y, w, 2);
+  }
+  // Vignette
+  const grad = asciiCtx.createRadialGradient(w/2, h/2, h/3, w/2, h/2, h);
+  grad.addColorStop(0, "rgba(0,0,0,0)");
+  grad.addColorStop(1, "rgba(0,0,0,0.6)");
+  asciiCtx.fillStyle = grad;
+  asciiCtx.fillRect(0, 0, w, h);
   const width=parseInt(widthInput.value);
   const font=parseInt(fontInput.value);
   const fps=parseInt(fpsInput.value);
   asciiOut.style.fontSize=font+"px";
+  if(schemeSelect.value === 'rainbow') {
+    asciiOut.classList.add('rainbow');
+    asciiOut.style.background = '';
+    asciiOut.style.color = 'transparent';
+  } else {
+    asciiOut.classList.remove('rainbow');
+    asciiOut.style.background = bg.value;
+    asciiOut.style.color = txt.value;
+  }
   asciiOut.style.background=bgInput.value;
   asciiOut.style.color=txtInput.value;
 
-  can.width=width;
+  if(can.width!==width)can.width=width;
   const ratio=vid.videoHeight/vid.videoWidth;
-  can.height=Math.floor(width*ratio/2);
+  can.height=Math.floor(widthVal*ratio/2);
 
   ctx.drawImage(vid,0,0,can.width,can.height);
   const frame=ctx.getImageData(0,0,can.width,can.height);
-  asciiOut.textContent=frameToASCII(frame);
+  const txtContent = frameToASCII(frame);
+
+  const res = resolution.value;
+  if (res === 'dynamic') {
+    asciiCanvas.style.display = 'none';
+    asciiOut.style.display = 'inline-block';
+    asciiOut.style.fontSize=font+"px";
+    asciiOut.style.background=bg.value;
+    asciiOut.style.color=txt.value;
+    asciiOut.textContent=txtContent;
+  } else {
+    asciiOut.style.display = 'none';
+    asciiCanvas.style.display = 'inline-block';
+    let targetW = 1280, targetH = 720;
+    if (res === '480p') { targetW=854; targetH=480; }
+    else if (res === '1080p') { targetW=1920; targetH=1080; }
+
+    drawAsciiToCanvas(txtContent, targetW, targetH, widthVal);
+  }
+
   setTimeout(()=>requestAnimationFrame(renderLoop),1000/fps);
+}
+
+function drawAsciiToCanvas(text, w, h, charsPerLine) {
+  asciiCanvas.width = w;
+  asciiCanvas.height = h;
+  const actx = asciiCtx;
+
+  actx.fillStyle = bg.value;
+  actx.fillRect(0, 0, w, h);
+
+  const charWidth = w / charsPerLine;
+  const fontSize = charWidth / 0.6; // approx for monospace
+  const lineHeight = fontSize * 0.6; // matching css line-height 0.6em
+
+  actx.font = `${fontSize}px monospace`;
+  actx.fillStyle = txt.value;
+  actx.textBaseline = 'top';
+
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    actx.fillText(lines[i], 0, i * lineHeight);
+  }
 }
 
 function frameToASCII(frame){
@@ -281,6 +431,39 @@ function frameToASCII(frame){
   return out;
 }
 
+function drawAsciiToCanvas(text, canvas, fontSize, bgColor, txtColor) {
+  const ctx = canvas.getContext('2d');
+  const lines = text.split('\n');
+  if (!lines.length) return;
+
+  // Set font to measure roughly
+  ctx.font = fontSize + "px monospace";
+  const charWidth = ctx.measureText("A").width;
+  const lineHeight = fontSize * 0.6;
+
+  const newWidth = Math.ceil(lines[0].length * charWidth);
+  const newHeight = Math.ceil(lines.length * lineHeight);
+
+  // Resize if needed (clears canvas)
+  if (canvas.width !== newWidth || canvas.height !== newHeight) {
+    canvas.width = newWidth;
+    canvas.height = newHeight;
+  }
+
+  // Draw background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw text
+  ctx.fillStyle = txtColor;
+  ctx.font = fontSize + "px monospace";
+  ctx.textBaseline = "top";
+
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], 0, i * lineHeight);
+  }
+}
+
 // AI Generation Logic
 aiGenerate.onclick = async () => {
     const prompt = aiPrompt.value.trim();
@@ -291,9 +474,9 @@ aiGenerate.onclick = async () => {
          vid.pause();
     }
 
-    status.textContent = "Initiating AI...";
-    aiStatusDetail.textContent = "Starting...";
-    asciiOut.textContent = "Processing...";
+    status.textContent = "Connecting to Pollinations.ai...";
+    asciiOut.textContent = "Initializing AI generation...";
+    aiDownload.style.display = 'none';
 
     const provider = aiProvider.value;
     const key = aiApiKey.value.trim();
@@ -311,9 +494,8 @@ aiGenerate.onclick = async () => {
              aiStatusDetail.textContent = "Enhanced: " + currentPrompt;
         }
 
-        // 2. Generate Image
-        status.textContent = "Generating Image...";
-        const imageUrl = await generateImage(currentPrompt, style, provider, key);
+    img.onload = () => {
+        status.textContent = "Image loaded. Converting to ASCII...";
 
         // 3. Process Image
         status.textContent = "Loading Image...";
@@ -331,36 +513,66 @@ aiGenerate.onclick = async () => {
             asciiOut.style.background = bgInput.value;
             asciiOut.style.color = txtInput.value;
 
-            const ratio = img.height / img.width;
-            can.width = width;
-            can.height = Math.floor(width * ratio / 2);
+        status.textContent = "AI Art Generated! You can now download the text.";
+        aiDownload.style.display = 'inline-block';
+    };
 
-            ctx.drawImage(img, 0, 0, can.width, can.height);
-            const frame = ctx.getImageData(0, 0, can.width, can.height);
-            asciiOut.textContent = frameToASCII(frame);
+    img.onerror = () => {
+        status.textContent = "Error generating image. Pollinations.ai might be busy.";
+        asciiOut.textContent = "Error loading image from AI service.";
+    };
+};
 
-            status.textContent = "AI Art Generated!";
-        };
-
-        img.onerror = () => {
-            status.textContent = "Error loading image.";
-            aiStatusDetail.textContent = "Failed to load image from URL: " + imageUrl;
-        };
-
-    } catch (e) {
-        status.textContent = "Error: " + e.message;
-        aiStatusDetail.textContent = "Error: " + e.message;
-        console.error(e);
-    }
+aiDownload.onclick = () => {
+    const text = asciiOut.textContent;
+    if (!text) return;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ai_ascii_art.txt';
+    a.click();
+    URL.revokeObjectURL(url);
 };
 
 // Recording
 recBtn.onclick=async()=>{
   if(!running)start.click();
   if(recorder&&recorder.state==="recording")return;
-  // This might fail if browser doesn't support captureStream on Pre
+  const fpsVal = parseInt(document.getElementById('fps').value);
+  stream=asciiCanvas.captureStream(fpsVal);
+  recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
+  chunks=[];
+  recorder.ondataavailable=e=>chunks.push(e.data);
+  recorder.onstop=saveRecording;
+  recorder.start();
+  status.textContent="Recording ASCII...";
+  vid.onended=()=>recorder.stop();
+
   try {
-    stream=asciiOut.captureStream(parseInt(fpsInput.value));
+    // Initial draw
+    const font=parseInt(fontInput.value);
+    drawAsciiToCanvas(asciiOut.textContent || " ", recordingCan, font, bgInput.value, txtInput.value);
+
+    stream=recordingCan.captureStream(parseInt(fpsInput.value));
+
+    // Add audio if requested
+    if (keepAudio.checked) {
+        let audioStream = null;
+        if (vid.captureStream) {
+            audioStream = vid.captureStream();
+        } else if (vid.mozCaptureStream) {
+            audioStream = vid.mozCaptureStream();
+        }
+
+        if (audioStream) {
+            const audioTracks = audioStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                stream.addTrack(audioTracks[0]);
+            }
+        }
+    }
+
     recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
     chunks=[];
     recorder.ondataavailable=e=>chunks.push(e.data);
@@ -370,8 +582,8 @@ recBtn.onclick=async()=>{
     vid.onended=()=>recorder.stop();
   } catch(e) {
       console.error(e);
-      status.textContent = "Recording not supported on this browser.";
-      alert("Recording is not supported in this environment.");
+      status.textContent = "Recording failed: " + e.message;
+      alert("Recording failed. See console for details.");
   }
 };
 
@@ -384,21 +596,83 @@ async function saveRecording(){
   status.textContent="Saved ascii_video.webm";
 
   // Optional MP4 conversion
+  const ffmpeg=createFFmpeg({log:false});
+  await ffmpeg.load();
+  await ffmpeg.FS('writeFile','input.webm',await fetchFile(blob));
+  await ffmpeg.run('-i','input.webm','-c:v','libx264','output.mp4');
+  const data=ffmpeg.FS('readFile','output.mp4');
+  const mp4URL=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
+  const b=document.createElement('a');
+  b.href=mp4URL;b.download='ascii_video.mp4';b.click();
+  status.textContent+=" and ascii_video.mp4";
   try {
       if(typeof FFmpeg === 'undefined') throw new Error("FFmpeg not loaded");
-      const ffmpeg=FFmpeg.createFFmpeg({log:false});
+      status.textContent += ". Converting to MP4...";
+      const { createFFmpeg, fetchFile } = FFmpeg;
+      const ffmpeg = createFFmpeg({ log: false });
       await ffmpeg.load();
-      await ffmpeg.FS('writeFile','input.webm',await fetchFile(blob));
-      await ffmpeg.run('-i','input.webm','-c:v','libx264','output.mp4');
-      const data=ffmpeg.FS('readFile','output.mp4');
-      const mp4URL=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
-      const b=document.createElement('a');
-      b.href=mp4URL;b.download='ascii_video.mp4';b.click();
-      status.textContent+=" and ascii_video.mp4";
+      await ffmpeg.FS('writeFile', 'input.webm', await fetchFile(blob));
+      await ffmpeg.run('-i', 'input.webm', '-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4');
+      const data = ffmpeg.FS('readFile', 'output.mp4');
+      const mp4URL = URL.createObjectURL(new Blob([data.buffer], {type: 'video/mp4'}));
+      const b = document.createElement('a');
+      b.href = mp4URL;
+      b.download = 'ascii_video.mp4';
+      b.click();
+      status.textContent += " and ascii_video.mp4";
   } catch(e) {
       console.log("FFmpeg conversion failed or skipped:", e);
+      status.textContent += ". MP4 conversion failed.";
   }
 }
+
+// AI Generator
+const aiPrompt = document.getElementById('ai-prompt');
+const aiStyle = document.getElementById('ai-style');
+const aiBtn = document.getElementById('ai-generate');
+
+aiBtn.onclick = () => {
+  const prompt = aiPrompt.value.trim();
+  if(!prompt) return alert("Please enter a prompt");
+
+  // Stop video loop if running
+  if(running) stop.click();
+
+  status.textContent = "Generating AI Image...";
+
+  let finalPrompt = prompt;
+  if(aiStyle.value === 'minimalist') finalPrompt += ", minimalist, simple lines, high contrast";
+
+  const encodedPrompt = encodeURIComponent(finalPrompt);
+  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}`;
+
+  const img = new Image();
+  img.crossOrigin = "Anonymous";
+  img.src = url;
+
+  img.onload = () => {
+    const wVal = parseInt(document.getElementById('width').value);
+    const fontVal = parseInt(document.getElementById('fontsize').value);
+
+    asciiOut.style.fontSize = fontVal + "px";
+    asciiOut.style.background = document.getElementById('bg').value;
+    asciiOut.style.color = document.getElementById('txt').value;
+
+    can.width = wVal;
+    const ratio = img.height / img.width;
+    can.height = Math.floor(wVal * ratio / 2);
+
+    ctx.drawImage(img, 0, 0, can.width, can.height);
+    const frame = ctx.getImageData(0, 0, can.width, can.height);
+    asciiOut.textContent = frameToASCII(frame);
+    status.textContent = "AI Art Generated!";
+  };
+
+  img.onerror = () => {
+    status.textContent = "Error loading AI image.";
+    alert("Failed to load image from Pollinations.ai");
+  };
+};
 </script>
 </body>
 </html>
