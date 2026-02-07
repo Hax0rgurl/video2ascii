@@ -93,6 +93,7 @@
   <canvas id="ascii-canvas" style="display:none;"></canvas>
 </div>
 <canvas id="canvas" style="display:none;"></canvas>
+<canvas id="recording-canvas" style="display:none;"></canvas>
 <p id="status"></p>
 
 <!-- ffmpeg.wasm CDN -->
@@ -103,7 +104,9 @@ const chars="@#8&$%WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`
 const file=document.getElementById('file');
 const vid=document.getElementById('video');
 const can=document.getElementById('canvas');
+const recordingCan=document.getElementById('recording-canvas');
 const ctx=can.getContext('2d');
+const recordingCtx=recordingCan.getContext('2d');
 const asciiOut=document.getElementById('ascii');
 const asciiCanvas=document.getElementById('ascii-canvas');
 const asciiCtx=asciiCanvas.getContext('2d');
@@ -124,6 +127,7 @@ const fpsInput = document.getElementById('fps');
 const fontInput = document.getElementById('fontsize');
 const bgInput = document.getElementById('bg');
 const txtInput = document.getElementById('txt');
+const keepAudio = document.getElementById('keep-audio');
 
 let running=false, recorder=null, chunks=[], stream=null;
 
@@ -215,6 +219,39 @@ function frameToASCII(frame){
   return out;
 }
 
+function drawAsciiToCanvas(text, canvas, fontSize, bgColor, txtColor) {
+  const ctx = canvas.getContext('2d');
+  const lines = text.split('\n');
+  if (!lines.length) return;
+
+  // Set font to measure roughly
+  ctx.font = fontSize + "px monospace";
+  const charWidth = ctx.measureText("A").width;
+  const lineHeight = fontSize * 0.6;
+
+  const newWidth = Math.ceil(lines[0].length * charWidth);
+  const newHeight = Math.ceil(lines.length * lineHeight);
+
+  // Resize if needed (clears canvas)
+  if (canvas.width !== newWidth || canvas.height !== newHeight) {
+    canvas.width = newWidth;
+    canvas.height = newHeight;
+  }
+
+  // Draw background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw text
+  ctx.fillStyle = txtColor;
+  ctx.font = fontSize + "px monospace";
+  ctx.textBaseline = "top";
+
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], 0, i * lineHeight);
+  }
+}
+
 // AI Generation Logic
 aiGenerate.onclick = async () => {
     const prompt = aiPrompt.value.trim();
@@ -269,9 +306,31 @@ aiGenerate.onclick = async () => {
 recBtn.onclick=async()=>{
   if(!running)start.click();
   if(recorder&&recorder.state==="recording")return;
-  // This might fail if browser doesn't support captureStream on Pre
+
   try {
-    stream=asciiOut.captureStream(parseInt(fpsInput.value));
+    // Initial draw
+    const font=parseInt(fontInput.value);
+    drawAsciiToCanvas(asciiOut.textContent || " ", recordingCan, font, bgInput.value, txtInput.value);
+
+    stream=recordingCan.captureStream(parseInt(fpsInput.value));
+
+    // Add audio if requested
+    if (keepAudio.checked) {
+        let audioStream = null;
+        if (vid.captureStream) {
+            audioStream = vid.captureStream();
+        } else if (vid.mozCaptureStream) {
+            audioStream = vid.mozCaptureStream();
+        }
+
+        if (audioStream) {
+            const audioTracks = audioStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                stream.addTrack(audioTracks[0]);
+            }
+        }
+    }
+
     recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
     chunks=[];
     recorder.ondataavailable=e=>chunks.push(e.data);
@@ -281,8 +340,8 @@ recBtn.onclick=async()=>{
     vid.onended=()=>recorder.stop();
   } catch(e) {
       console.error(e);
-      status.textContent = "Recording not supported on this browser.";
-      alert("Recording is not supported in this environment.");
+      status.textContent = "Recording failed: " + e.message;
+      alert("Recording failed. See console for details.");
   }
 };
 
@@ -297,17 +356,22 @@ async function saveRecording(){
   // Optional MP4 conversion
   try {
       if(typeof FFmpeg === 'undefined') throw new Error("FFmpeg not loaded");
-      const ffmpeg=FFmpeg.createFFmpeg({log:false});
+      status.textContent += ". Converting to MP4...";
+      const { createFFmpeg, fetchFile } = FFmpeg;
+      const ffmpeg = createFFmpeg({ log: false });
       await ffmpeg.load();
-      await ffmpeg.FS('writeFile','input.webm',await fetchFile(blob));
-      await ffmpeg.run('-i','input.webm','-c:v','libx264','output.mp4');
-      const data=ffmpeg.FS('readFile','output.mp4');
-      const mp4URL=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
-      const b=document.createElement('a');
-      b.href=mp4URL;b.download='ascii_video.mp4';b.click();
-      status.textContent+=" and ascii_video.mp4";
+      await ffmpeg.FS('writeFile', 'input.webm', await fetchFile(blob));
+      await ffmpeg.run('-i', 'input.webm', '-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4');
+      const data = ffmpeg.FS('readFile', 'output.mp4');
+      const mp4URL = URL.createObjectURL(new Blob([data.buffer], {type: 'video/mp4'}));
+      const b = document.createElement('a');
+      b.href = mp4URL;
+      b.download = 'ascii_video.mp4';
+      b.click();
+      status.textContent += " and ascii_video.mp4";
   } catch(e) {
       console.log("FFmpeg conversion failed or skipped:", e);
+      status.textContent += ". MP4 conversion failed.";
   }
 }
 </script>
