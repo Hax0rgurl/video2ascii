@@ -344,7 +344,7 @@ function applyOldTVEffect(w, h) {
   asciiOut.style.background=bgInput.value;
   asciiOut.style.color=txtInput.value;
 
-  can.width=width;
+  if(can.width!==width)can.width=width;
   const ratio=vid.videoHeight/vid.videoWidth;
   can.height=Math.floor(widthVal*ratio/2);
 
