@@ -106,6 +106,19 @@
   <button id="ai-download" style="display:none;">Download Text</button>
 </div>
 
+<div class="controls" id="ai-settings">
+  <label>Provider:
+    <select id="ai-provider" onchange="toggleApiKey()">
+      <option value="pollinations">Pollinations (Free)</option>
+      <option value="openai">OpenAI (API Key)</option>
+      <option value="mock">Mock (Test)</option>
+    </select>
+  </label>
+  <input type="password" id="ai-api-key" placeholder="API Key (OpenAI)" style="display:none; width: 200px;">
+  <label><input type="checkbox" id="ai-enhance" checked> Enhance Prompt</label>
+</div>
+<div id="ai-status-detail" style="color: #0f0; font-size: 0.8em; margin-bottom: 0.5em;"></div>
+
 <div class="display">
   <video id="video" controls></video>
   <pre id="ascii" style="display:none;"></pre>
@@ -465,33 +478,40 @@ aiGenerate.onclick = async () => {
     asciiOut.textContent = "Initializing AI generation...";
     aiDownload.style.display = 'none';
 
+    const provider = aiProvider.value;
+    const key = aiApiKey.value.trim();
+    const shouldEnhance = aiEnhance.checked;
     const style = aiStyle.value;
-    const finalPrompt = style ? `${prompt}, ${style}` : prompt;
-    const seed = Math.floor(Math.random() * 10000);
-    // Adding nologo to avoid watermarks messing up ASCII
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?seed=${seed}&nologo=true`;
 
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.src = imageUrl;
+    try {
+        let currentPrompt = prompt;
+
+        // 1. Enhance Prompt
+        if (shouldEnhance) {
+             status.textContent = "Enhancing Prompt...";
+             aiStatusDetail.textContent = "Enhancing prompt with " + provider + "...";
+             currentPrompt = await enhancePrompt(prompt, provider, key);
+             aiStatusDetail.textContent = "Enhanced: " + currentPrompt;
+        }
 
     img.onload = () => {
         status.textContent = "Image loaded. Converting to ASCII...";
 
-        const width = parseInt(widthInput.value);
-        const font = parseInt(fontInput.value);
+        // 3. Process Image
+        status.textContent = "Loading Image...";
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.src = imageUrl;
 
-        asciiOut.style.fontSize = font + "px";
-        asciiOut.style.background = bgInput.value;
-        asciiOut.style.color = txtInput.value;
+        img.onload = () => {
+            status.textContent = "Converting to ASCII...";
 
-        const ratio = img.height / img.width;
-        can.width = width;
-        can.height = Math.floor(width * ratio / 2);
+            const width = parseInt(widthInput.value);
+            const font = parseInt(fontInput.value);
 
-        ctx.drawImage(img, 0, 0, can.width, can.height);
-        const frame = ctx.getImageData(0, 0, can.width, can.height);
-        asciiOut.textContent = frameToASCII(frame);
+            asciiOut.style.fontSize = font + "px";
+            asciiOut.style.background = bgInput.value;
+            asciiOut.style.color = txtInput.value;
 
         status.textContent = "AI Art Generated! You can now download the text.";
         aiDownload.style.display = 'inline-block';
