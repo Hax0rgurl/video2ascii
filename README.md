@@ -24,7 +24,7 @@ https://hax0rgurl.github.io/video2ascii/
 
 ### 2. AI ASCII Art Generator
 
-- Generate ASCII art using AI based on text prompts
+- Generate ASCII art using AI based on text prompts (powered by Pollinations.ai)
 - Choose from different art styles:
   - Default
   - Minimalist
@@ -43,6 +43,7 @@ https://hax0rgurl.github.io/video2ascii/
 2. AI ASCII Art Generator:
    - Enter a text prompt in the input field
    - Select an art style from the dropdown menu
+   - Click "Generate" to create AI-generated ASCII art
    - Click "Generate ASCII Art" to create AI-generated ASCII art
    - Click "Download Text" to save the result
 
@@ -50,6 +51,7 @@ https://hax0rgurl.github.io/video2ascii/
 
 - Built using HTML, CSS, and JavaScript
 - Utilizes HTML5 Canvas for video processing and ASCII rendering
+- Integrates with Pollinations.ai for AI image generation
 - AI art generation powered by [Pollinations.ai](https://pollinations.ai/)
 
 ## Future Enhancements

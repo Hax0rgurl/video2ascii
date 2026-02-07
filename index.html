@@ -83,6 +83,14 @@
   <button id="stop">Stop</button>
 </div>
 
+<h2>AI ASCII Art Generator</h2>
+<div class="controls">
+  <input type="text" id="ai-prompt" placeholder="Enter prompt..." style="width: 300px;">
+  <select id="ai-style">
+    <option value="default">Default</option>
+    <option value="minimalist">Minimalist</option>
+  </select>
+  <button id="ai-generate">Generate</button>
 <h2>🤖 AI ASCII Art Generator</h2>
 <div class="controls">
   <input type="text" id="ai-prompt" placeholder="Enter text prompt..." style="width: 200px;">
@@ -597,6 +605,54 @@ async function saveRecording(){
       status.textContent += ". MP4 conversion failed.";
   }
 }
+
+// AI Generator
+const aiPrompt = document.getElementById('ai-prompt');
+const aiStyle = document.getElementById('ai-style');
+const aiBtn = document.getElementById('ai-generate');
+
+aiBtn.onclick = () => {
+  const prompt = aiPrompt.value.trim();
+  if(!prompt) return alert("Please enter a prompt");
+
+  // Stop video loop if running
+  if(running) stop.click();
+
+  status.textContent = "Generating AI Image...";
+
+  let finalPrompt = prompt;
+  if(aiStyle.value === 'minimalist') finalPrompt += ", minimalist, simple lines, high contrast";
+
+  const encodedPrompt = encodeURIComponent(finalPrompt);
+  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}`;
+
+  const img = new Image();
+  img.crossOrigin = "Anonymous";
+  img.src = url;
+
+  img.onload = () => {
+    const wVal = parseInt(document.getElementById('width').value);
+    const fontVal = parseInt(document.getElementById('fontsize').value);
+
+    asciiOut.style.fontSize = fontVal + "px";
+    asciiOut.style.background = document.getElementById('bg').value;
+    asciiOut.style.color = document.getElementById('txt').value;
+
+    can.width = wVal;
+    const ratio = img.height / img.width;
+    can.height = Math.floor(wVal * ratio / 2);
+
+    ctx.drawImage(img, 0, 0, can.width, can.height);
+    const frame = ctx.getImageData(0, 0, can.width, can.height);
+    asciiOut.textContent = frameToASCII(frame);
+    status.textContent = "AI Art Generated!";
+  };
+
+  img.onerror = () => {
+    status.textContent = "Error loading AI image.";
+    alert("Failed to load image from Pollinations.ai");
+  };
+};
 </script>
 </body>
 </html>
