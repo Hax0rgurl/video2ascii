@@ -14,12 +14,12 @@ https://hax0rgurl.github.io/video2ascii/
   - Frame rate (FPS)
   - Color options (colored or monochrome)
   - ASCII character sets (standard, extended, or custom)
-  - Placeholder: Color schemes (Matrix Green, Cyberpunk Neon, Retro Computer, Soft Pastel, Rainbow)
+  - Color schemes (Matrix Green, Cyberpunk Neon, Retro Computer, Soft Pastel, Rainbow)
   - Background and text color selection
   - Export ASCII animations as MP4 files
 - Additional features:
   - Place holder: Output resolution selection (480p, 720p, 1080p)
-  - Place holder: Special effects (Matrix Rain, Glitch, Old TV)
+  - Special effects (Matrix Rain, Glitch, Old TV)
   - Haven't been able to test it keeps crashing on long files: Option to keep original audio
 
 ### 2. AI ASCII Art Generator(NOT WORKING)
