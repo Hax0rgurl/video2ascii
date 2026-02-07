@@ -147,19 +147,25 @@ function renderLoop(){
   setTimeout(()=>requestAnimationFrame(renderLoop),1000/fps);
 }
 
+const decoder = new TextDecoder();
 function frameToASCII(frame){
-  const p=frame.data,w=frame.width,h=frame.height;let out="";
+  const p=frame.data,w=frame.width,h=frame.height;
+  const len = chars.length - 1;
+  const size = (w + 1) * h;
+  const buf = new Uint8Array(size);
+  let ptr = 0;
+
   for(let y=0;y<h;y++){
     for(let x=0;x<w;x++){
       const i=(y*w+x)*4;
       const r=p[i],g=p[i+1],b=p[i+2];
       const bright=(0.299*r+0.587*g+0.114*b)/255;
-      const idx=Math.floor((1-bright)*(chars.length-1));
-      out+=chars[idx];
+      const idx=Math.floor((1-bright)*len);
+      buf[ptr++] = chars.charCodeAt(idx);
     }
-    out+="\n";
+    buf[ptr++] = 10; // newline
   }
-  return out;
+  return decoder.decode(buf);
 }
 
 // AI Generation Logic
