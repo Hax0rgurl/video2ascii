@@ -60,6 +60,14 @@
       <option value="oldtv">Old TV</option>
     </select>
   </label>
+  <label>Resolution:
+    <select id="resolution">
+      <option value="dynamic">Window</option>
+      <option value="480p">480p</option>
+      <option value="720p">720p</option>
+      <option value="1080p">1080p</option>
+    </select>
+  </label>
   <button id="start">Convert</button>
   <button id="record">Record</button>
   <button id="stop">Stop</button>
@@ -82,12 +90,13 @@
 <div class="display">
   <video id="video" controls></video>
   <pre id="ascii"></pre>
+  <canvas id="ascii-canvas" style="display:none;"></canvas>
 </div>
 <canvas id="canvas" style="display:none;"></canvas>
 <p id="status"></p>
 
 <!-- ffmpeg.wasm CDN -->
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.4/dist/ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
 
 <script>
 const chars="@#8&$%WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
@@ -96,6 +105,9 @@ const vid=document.getElementById('video');
 const can=document.getElementById('canvas');
 const ctx=can.getContext('2d');
 const asciiOut=document.getElementById('ascii');
+const asciiCanvas=document.getElementById('ascii-canvas');
+const asciiCtx=asciiCanvas.getContext('2d');
+const resolution=document.getElementById('resolution');
 const start=document.getElementById('start');
 const stop=document.getElementById('stop');
 const recBtn=document.getElementById('record');
@@ -139,12 +151,53 @@ function renderLoop(){
 
   can.width=width;
   const ratio=vid.videoHeight/vid.videoWidth;
-  can.height=Math.floor(width*ratio/2);
+  can.height=Math.floor(widthVal*ratio/2);
 
   ctx.drawImage(vid,0,0,can.width,can.height);
   const frame=ctx.getImageData(0,0,can.width,can.height);
-  asciiOut.textContent=frameToASCII(frame);
+  const txtContent = frameToASCII(frame);
+
+  const res = resolution.value;
+  if (res === 'dynamic') {
+    asciiCanvas.style.display = 'none';
+    asciiOut.style.display = 'inline-block';
+    asciiOut.style.fontSize=font+"px";
+    asciiOut.style.background=bg.value;
+    asciiOut.style.color=txt.value;
+    asciiOut.textContent=txtContent;
+  } else {
+    asciiOut.style.display = 'none';
+    asciiCanvas.style.display = 'inline-block';
+    let targetW = 1280, targetH = 720;
+    if (res === '480p') { targetW=854; targetH=480; }
+    else if (res === '1080p') { targetW=1920; targetH=1080; }
+
+    drawAsciiToCanvas(txtContent, targetW, targetH, widthVal);
+  }
+
   setTimeout(()=>requestAnimationFrame(renderLoop),1000/fps);
+}
+
+function drawAsciiToCanvas(text, w, h, charsPerLine) {
+  asciiCanvas.width = w;
+  asciiCanvas.height = h;
+  const actx = asciiCtx;
+
+  actx.fillStyle = bg.value;
+  actx.fillRect(0, 0, w, h);
+
+  const charWidth = w / charsPerLine;
+  const fontSize = charWidth / 0.6; // approx for monospace
+  const lineHeight = fontSize * 0.6; // matching css line-height 0.6em
+
+  actx.font = `${fontSize}px monospace`;
+  actx.fillStyle = txt.value;
+  actx.textBaseline = 'top';
+
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    actx.fillText(lines[i], 0, i * lineHeight);
+  }
 }
 
 function frameToASCII(frame){
