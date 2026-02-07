@@ -29,6 +29,9 @@
     white-space:pre;line-height:0.6em;font-size:10px;text-align:center;
     overflow:hidden;max-width:45%;
   }
+  #ascii-canvas {
+    display:block;background:#000;border:1px solid #0f0;max-width:45%;
+  }
   .display{display:flex;justify-content:center;align-items:flex-start;gap:1em;flex-wrap:wrap;}
   #status{margin-top:0.5em;color:#0f0;}
   .rainbow {
@@ -97,6 +100,8 @@
 
 <div class="display">
   <video id="video" controls></video>
+  <pre id="ascii" style="display:none;"></pre>
+  <canvas id="ascii-canvas"></canvas>
   <pre id="ascii"></pre>
   <canvas id="ascii-canvas" style="display:none;"></canvas>
 </div>
@@ -108,6 +113,7 @@
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
 
 <script>
+const { createFFmpeg, fetchFile } = FFmpeg;
 const chars="@#8&$%WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
 const file=document.getElementById('file');
 const vid=document.getElementById('video');
@@ -165,6 +171,23 @@ const keepAudio = document.getElementById('keep-audio');
 
 let running=false, recorder=null, chunks=[], stream=null;
 
+// Color Schemes
+const schemes = {
+  matrix: {bg:"#000000", txt:"#00ff00"},
+  cyber: {bg:"#000000", txt:"#00ffff"},
+  amber: {bg:"#000000", txt:"#ffb000"},
+  pastel: {bg:"#222222", txt:"#ffb6c1"},
+  rainbow: {bg:"#000000", txt:"#ffffff"} // Rainbow handled in render? For now just white.
+};
+
+document.getElementById('scheme').onchange = (e) => {
+  const s = schemes[e.target.value];
+  if(s){
+    document.getElementById('bg').value = s.bg;
+    document.getElementById('txt').value = s.txt;
+  }
+};
+
 file.onchange=e=>{
   const f=e.target.files[0];
   if(f){vid.src=URL.createObjectURL(f);vid.load();status.textContent="Video loaded";}
@@ -178,8 +201,133 @@ stop.onclick=()=>{
   status.textContent="Stopped.";
 };
 
+let effectState = {
+  matrix: { drops: [] },
+  glitch: { timer: 0 },
+  oldtv: { offset: 0 }
+};
+
 function renderLoop(){
   if(!running||vid.paused||vid.ended)return;
+  const wVal=parseInt(document.getElementById('width').value);
+  const font=parseInt(document.getElementById('fontsize').value);
+  const fpsVal=parseInt(document.getElementById('fps').value);
+  const bgColor=document.getElementById('bg').value;
+  const txtColor=document.getElementById('txt').value;
+  const effect=document.getElementById('fx').value;
+
+  can.width=wVal;
+  const ratio=vid.videoHeight/vid.videoWidth;
+  can.height=Math.floor(wVal*ratio/2);
+
+  ctx.drawImage(vid,0,0,can.width,can.height);
+  const frame=ctx.getImageData(0,0,can.width,can.height);
+  const asciiText=frameToASCII(frame);
+
+  renderASCII(asciiText, wVal, font, bgColor, txtColor, effect);
+
+  setTimeout(()=>requestAnimationFrame(renderLoop),1000/fpsVal);
+}
+
+function renderASCII(text, cols, fontSize, bgColor, txtColor, effect) {
+  asciiCtx.font = fontSize + "px monospace";
+  asciiCtx.textBaseline = "top";
+  const metrics = asciiCtx.measureText("W");
+  const charW = metrics.width;
+  const charH = fontSize * 0.6;
+
+  const lines = text.split('\n');
+  const rows = lines.length;
+
+  const targetW = Math.ceil(cols * charW);
+  const targetH = Math.ceil(rows * charH);
+
+  if (asciiCanvas.width !== targetW || asciiCanvas.height !== targetH) {
+     asciiCanvas.width = targetW;
+     asciiCanvas.height = targetH;
+     // Reset font after resize
+     asciiCtx.font = fontSize + "px monospace";
+     asciiCtx.textBaseline = "top";
+  }
+
+  // Draw Background
+  asciiCtx.fillStyle = bgColor;
+  asciiCtx.fillRect(0, 0, asciiCanvas.width, asciiCanvas.height);
+
+  // Draw Text
+  asciiCtx.fillStyle = txtColor;
+  for (let i = 0; i < rows; i++) {
+    asciiCtx.fillText(lines[i], 0, i * charH);
+  }
+
+  // Apply Effects
+  if (effect === 'matrix') {
+     applyMatrixEffect(asciiCanvas.width, asciiCanvas.height, charW, charH);
+  } else if (effect === 'glitch') {
+     applyGlitchEffect(asciiCanvas.width, asciiCanvas.height);
+  } else if (effect === 'oldtv') {
+     applyOldTVEffect(asciiCanvas.width, asciiCanvas.height);
+  }
+}
+
+function applyMatrixEffect(w, h, charW, charH) {
+  const cols = Math.floor(w / charW);
+  if (effectState.matrix.drops.length !== cols) {
+      effectState.matrix.drops = new Array(cols).fill(0).map(() => Math.random() * h);
+  }
+
+  for (let i = 0; i < cols; i++) {
+      const x = i * charW;
+      const y = effectState.matrix.drops[i];
+
+      // Draw random katakana or char
+      const char = String.fromCharCode(0x30A0 + Math.random() * 96);
+
+      // Bright head
+      asciiCtx.fillStyle = '#fff';
+      asciiCtx.fillText(char, x, y);
+
+      // Trail
+      asciiCtx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+      asciiCtx.fillText(char, x, y - charH);
+
+      if (y > h && Math.random() > 0.975) {
+          effectState.matrix.drops[i] = 0;
+      } else {
+          effectState.matrix.drops[i] += charH;
+      }
+  }
+}
+
+function applyGlitchEffect(w, h) {
+  if (Math.random() < 0.1) {
+      const sliceH = Math.random() * 50 + 10;
+      const sliceY = Math.random() * h;
+      const offset = Math.random() * 20 - 10;
+
+      asciiCtx.drawImage(asciiCanvas, 0, sliceY, w, sliceH, offset, sliceY, w, sliceH);
+
+      if (Math.random() < 0.3) {
+          asciiCtx.globalCompositeOperation = 'difference';
+          asciiCtx.fillStyle = 'white';
+          asciiCtx.fillRect(0, sliceY, w, 5);
+          asciiCtx.globalCompositeOperation = 'source-over';
+      }
+  }
+}
+
+function applyOldTVEffect(w, h) {
+  // Scanlines
+  asciiCtx.fillStyle = "rgba(0,0,0,0.1)";
+  for (let y = 0; y < h; y += 4) {
+      asciiCtx.fillRect(0, y, w, 2);
+  }
+  // Vignette
+  const grad = asciiCtx.createRadialGradient(w/2, h/2, h/3, w/2, h/2, h);
+  grad.addColorStop(0, "rgba(0,0,0,0)");
+  grad.addColorStop(1, "rgba(0,0,0,0.6)");
+  asciiCtx.fillStyle = grad;
+  asciiCtx.fillRect(0, 0, w, h);
   const width=parseInt(widthInput.value);
   const font=parseInt(fontInput.value);
   const fps=parseInt(fpsInput.value);
@@ -363,6 +511,15 @@ aiDownload.onclick = () => {
 recBtn.onclick=async()=>{
   if(!running)start.click();
   if(recorder&&recorder.state==="recording")return;
+  const fpsVal = parseInt(document.getElementById('fps').value);
+  stream=asciiCanvas.captureStream(fpsVal);
+  recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
+  chunks=[];
+  recorder.ondataavailable=e=>chunks.push(e.data);
+  recorder.onstop=saveRecording;
+  recorder.start();
+  status.textContent="Recording ASCII...";
+  vid.onended=()=>recorder.stop();
 
   try {
     // Initial draw
@@ -411,6 +568,15 @@ async function saveRecording(){
   status.textContent="Saved ascii_video.webm";
 
   // Optional MP4 conversion
+  const ffmpeg=createFFmpeg({log:false});
+  await ffmpeg.load();
+  await ffmpeg.FS('writeFile','input.webm',await fetchFile(blob));
+  await ffmpeg.run('-i','input.webm','-c:v','libx264','output.mp4');
+  const data=ffmpeg.FS('readFile','output.mp4');
+  const mp4URL=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
+  const b=document.createElement('a');
+  b.href=mp4URL;b.download='ascii_video.mp4';b.click();
+  status.textContent+=" and ascii_video.mp4";
   try {
       if(typeof FFmpeg === 'undefined') throw new Error("FFmpeg not loaded");
       status.textContent += ". Converting to MP4...";
