@@ -13,7 +13,7 @@
     margin:0;
     padding:1em;
   }
-  h1{margin:0.2em 0;}
+  h1, h2{margin:0.2em 0;}
   .controls{
     display:flex;flex-wrap:wrap;justify-content:center;gap:0.5em;margin-bottom:1em;
   }
@@ -60,42 +60,78 @@
       <option value="oldtv">Old TV</option>
     </select>
   </label>
+  <label>Resolution:
+    <select id="resolution">
+      <option value="dynamic">Window</option>
+      <option value="480p">480p</option>
+      <option value="720p">720p</option>
+      <option value="1080p">1080p</option>
+    </select>
+  </label>
   <button id="start">Convert</button>
   <button id="record">Record</button>
   <button id="stop">Stop</button>
 </div>
 
+<h2>🤖 AI ASCII Art Generator</h2>
+<div class="controls">
+  <input type="text" id="ai-prompt" placeholder="Enter text prompt..." style="width: 200px;">
+  <select id="ai-style">
+    <option value="">Default Style</option>
+    <option value="minimalist line art">Minimalist</option>
+    <option value="highly detailed, intricate">Detailed</option>
+    <option value="cyberpunk, neon">Cyberpunk</option>
+    <option value="retro computer graphics, 8-bit">Retro</option>
+    <option value="sketch, pencil drawing">Sketch</option>
+  </select>
+  <button id="ai-generate">Generate AI Art</button>
+  <button id="ai-download" style="display:none;">Download Text</button>
+</div>
+
 <div class="display">
   <video id="video" controls></video>
   <pre id="ascii"></pre>
+  <canvas id="ascii-canvas" style="display:none;"></canvas>
 </div>
 <canvas id="canvas" style="display:none;"></canvas>
+<canvas id="recording-canvas" style="display:none;"></canvas>
 <p id="status"></p>
 
 <!-- ffmpeg.wasm CDN -->
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.4/dist/ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
 
 <script>
 const chars="@#8&$%WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
 const file=document.getElementById('file');
 const vid=document.getElementById('video');
 const can=document.getElementById('canvas');
+const recordingCan=document.getElementById('recording-canvas');
 const ctx=can.getContext('2d');
+const recordingCtx=recordingCan.getContext('2d');
 const asciiOut=document.getElementById('ascii');
+const asciiCanvas=document.getElementById('ascii-canvas');
+const asciiCtx=asciiCanvas.getContext('2d');
+const resolution=document.getElementById('resolution');
 const start=document.getElementById('start');
 const stop=document.getElementById('stop');
 const recBtn=document.getElementById('record');
 const status=document.getElementById('status');
 
-let running=false, recorder=null, chunks=[], stream=null, ffmpeg=null;
+// AI Elements
+const aiPrompt = document.getElementById('ai-prompt');
+const aiStyle = document.getElementById('ai-style');
+const aiGenerate = document.getElementById('ai-generate');
+const aiDownload = document.getElementById('ai-download');
 
-async function initFFmpeg(){
-  status.textContent="Loading FFmpeg...";
-  ffmpeg=FFmpeg.createFFmpeg({log:false});
-  await ffmpeg.load();
-  status.textContent="FFmpeg loaded. Ready to convert.";
-}
-initFFmpeg();
+// Controls for settings
+const widthInput = document.getElementById('width');
+const fpsInput = document.getElementById('fps');
+const fontInput = document.getElementById('fontsize');
+const bgInput = document.getElementById('bg');
+const txtInput = document.getElementById('txt');
+const keepAudio = document.getElementById('keep-audio');
+
+let running=false, recorder=null, chunks=[], stream=null;
 
 file.onchange=e=>{
   const f=e.target.files[0];
@@ -105,28 +141,69 @@ file.onchange=e=>{
 start.onclick=()=>{if(!vid.src)return alert("Load a video");running=true;vid.play();renderLoop();};
 
 stop.onclick=()=>{
-  running=false;vid.pause();cancelAnimationFrame(renderLoop);
+  running=false;vid.pause();
   if(recorder&&recorder.state==="recording")recorder.stop();
   status.textContent="Stopped.";
 };
 
 function renderLoop(){
   if(!running||vid.paused||vid.ended)return;
-  const width=parseInt(width.value);
-  const font=parseInt(fontsize.value);
-  const fps=parseInt(fps.value);
+  const width=parseInt(widthInput.value);
+  const font=parseInt(fontInput.value);
+  const fps=parseInt(fpsInput.value);
   asciiOut.style.fontSize=font+"px";
-  asciiOut.style.background=bg.value;
-  asciiOut.style.color=txt.value;
+  asciiOut.style.background=bgInput.value;
+  asciiOut.style.color=txtInput.value;
 
   can.width=width;
   const ratio=vid.videoHeight/vid.videoWidth;
-  can.height=Math.floor(width*ratio/2);
+  can.height=Math.floor(widthVal*ratio/2);
 
   ctx.drawImage(vid,0,0,can.width,can.height);
   const frame=ctx.getImageData(0,0,can.width,can.height);
-  asciiOut.textContent=frameToASCII(frame);
+  const txtContent = frameToASCII(frame);
+
+  const res = resolution.value;
+  if (res === 'dynamic') {
+    asciiCanvas.style.display = 'none';
+    asciiOut.style.display = 'inline-block';
+    asciiOut.style.fontSize=font+"px";
+    asciiOut.style.background=bg.value;
+    asciiOut.style.color=txt.value;
+    asciiOut.textContent=txtContent;
+  } else {
+    asciiOut.style.display = 'none';
+    asciiCanvas.style.display = 'inline-block';
+    let targetW = 1280, targetH = 720;
+    if (res === '480p') { targetW=854; targetH=480; }
+    else if (res === '1080p') { targetW=1920; targetH=1080; }
+
+    drawAsciiToCanvas(txtContent, targetW, targetH, widthVal);
+  }
+
   setTimeout(()=>requestAnimationFrame(renderLoop),1000/fps);
+}
+
+function drawAsciiToCanvas(text, w, h, charsPerLine) {
+  asciiCanvas.width = w;
+  asciiCanvas.height = h;
+  const actx = asciiCtx;
+
+  actx.fillStyle = bg.value;
+  actx.fillRect(0, 0, w, h);
+
+  const charWidth = w / charsPerLine;
+  const fontSize = charWidth / 0.6; // approx for monospace
+  const lineHeight = fontSize * 0.6; // matching css line-height 0.6em
+
+  actx.font = `${fontSize}px monospace`;
+  actx.fillStyle = txt.value;
+  actx.textBaseline = 'top';
+
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    actx.fillText(lines[i], 0, i * lineHeight);
+  }
 }
 
 function frameToASCII(frame){
@@ -144,18 +221,144 @@ function frameToASCII(frame){
   return out;
 }
 
+function drawAsciiToCanvas(text, canvas, fontSize, bgColor, txtColor) {
+  const ctx = canvas.getContext('2d');
+  const lines = text.split('\n');
+  if (!lines.length) return;
+
+  // Set font to measure roughly
+  ctx.font = fontSize + "px monospace";
+  const charWidth = ctx.measureText("A").width;
+  const lineHeight = fontSize * 0.6;
+
+  const newWidth = Math.ceil(lines[0].length * charWidth);
+  const newHeight = Math.ceil(lines.length * lineHeight);
+
+  // Resize if needed (clears canvas)
+  if (canvas.width !== newWidth || canvas.height !== newHeight) {
+    canvas.width = newWidth;
+    canvas.height = newHeight;
+  }
+
+  // Draw background
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw text
+  ctx.fillStyle = txtColor;
+  ctx.font = fontSize + "px monospace";
+  ctx.textBaseline = "top";
+
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], 0, i * lineHeight);
+  }
+}
+
+// AI Generation Logic
+aiGenerate.onclick = async () => {
+    const prompt = aiPrompt.value.trim();
+    if (!prompt) return alert("Please enter a prompt");
+
+    if (running) {
+         running = false;
+         vid.pause();
+    }
+
+    status.textContent = "Connecting to Pollinations.ai...";
+    asciiOut.textContent = "Initializing AI generation...";
+    aiDownload.style.display = 'none';
+
+    const style = aiStyle.value;
+    const finalPrompt = style ? `${prompt}, ${style}` : prompt;
+    const seed = Math.floor(Math.random() * 10000);
+    // Adding nologo to avoid watermarks messing up ASCII
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?seed=${seed}&nologo=true`;
+
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = imageUrl;
+
+    img.onload = () => {
+        status.textContent = "Image loaded. Converting to ASCII...";
+
+        const width = parseInt(widthInput.value);
+        const font = parseInt(fontInput.value);
+
+        asciiOut.style.fontSize = font + "px";
+        asciiOut.style.background = bgInput.value;
+        asciiOut.style.color = txtInput.value;
+
+        const ratio = img.height / img.width;
+        can.width = width;
+        can.height = Math.floor(width * ratio / 2);
+
+        ctx.drawImage(img, 0, 0, can.width, can.height);
+        const frame = ctx.getImageData(0, 0, can.width, can.height);
+        asciiOut.textContent = frameToASCII(frame);
+
+        status.textContent = "AI Art Generated! You can now download the text.";
+        aiDownload.style.display = 'inline-block';
+    };
+
+    img.onerror = () => {
+        status.textContent = "Error generating image. Pollinations.ai might be busy.";
+        asciiOut.textContent = "Error loading image from AI service.";
+    };
+};
+
+aiDownload.onclick = () => {
+    const text = asciiOut.textContent;
+    if (!text) return;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ai_ascii_art.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
 // Recording
 recBtn.onclick=async()=>{
   if(!running)start.click();
   if(recorder&&recorder.state==="recording")return;
-  stream=asciiOut.captureStream(parseInt(fps.value));
-  recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
-  chunks=[];
-  recorder.ondataavailable=e=>chunks.push(e.data);
-  recorder.onstop=saveRecording;
-  recorder.start();
-  status.textContent="Recording ASCII...";
-  vid.onended=()=>recorder.stop();
+
+  try {
+    // Initial draw
+    const font=parseInt(fontInput.value);
+    drawAsciiToCanvas(asciiOut.textContent || " ", recordingCan, font, bgInput.value, txtInput.value);
+
+    stream=recordingCan.captureStream(parseInt(fpsInput.value));
+
+    // Add audio if requested
+    if (keepAudio.checked) {
+        let audioStream = null;
+        if (vid.captureStream) {
+            audioStream = vid.captureStream();
+        } else if (vid.mozCaptureStream) {
+            audioStream = vid.mozCaptureStream();
+        }
+
+        if (audioStream) {
+            const audioTracks = audioStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                stream.addTrack(audioTracks[0]);
+            }
+        }
+    }
+
+    recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
+    chunks=[];
+    recorder.ondataavailable=e=>chunks.push(e.data);
+    recorder.onstop=saveRecording;
+    recorder.start();
+    status.textContent="Recording ASCII...";
+    vid.onended=()=>recorder.stop();
+  } catch(e) {
+      console.error(e);
+      status.textContent = "Recording failed: " + e.message;
+      alert("Recording failed. See console for details.");
+  }
 };
 
 // Save .webm and optionally convert to .mp4
@@ -167,14 +370,25 @@ async function saveRecording(){
   status.textContent="Saved ascii_video.webm";
 
   // Optional MP4 conversion
-  if(!ffmpeg.isLoaded()) await ffmpeg.load();
-  await ffmpeg.FS('writeFile','input.webm',await FFmpeg.fetchFile(blob));
-  await ffmpeg.run('-i','input.webm','-c:v','libx264','output.mp4');
-  const data=ffmpeg.FS('readFile','output.mp4');
-  const mp4URL=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
-  const b=document.createElement('a');
-  b.href=mp4URL;b.download='ascii_video.mp4';b.click();
-  status.textContent+=" and ascii_video.mp4";
+  try {
+      if(typeof FFmpeg === 'undefined') throw new Error("FFmpeg not loaded");
+      status.textContent += ". Converting to MP4...";
+      const { createFFmpeg, fetchFile } = FFmpeg;
+      const ffmpeg = createFFmpeg({ log: false });
+      await ffmpeg.load();
+      await ffmpeg.FS('writeFile', 'input.webm', await fetchFile(blob));
+      await ffmpeg.run('-i', 'input.webm', '-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4');
+      const data = ffmpeg.FS('readFile', 'output.mp4');
+      const mp4URL = URL.createObjectURL(new Blob([data.buffer], {type: 'video/mp4'}));
+      const b = document.createElement('a');
+      b.href = mp4URL;
+      b.download = 'ascii_video.mp4';
+      b.click();
+      status.textContent += " and ascii_video.mp4";
+  } catch(e) {
+      console.log("FFmpeg conversion failed or skipped:", e);
+      status.textContent += ". MP4 conversion failed.";
+  }
 }
 </script>
 </body>
