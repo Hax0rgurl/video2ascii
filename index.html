@@ -137,9 +137,10 @@ function renderLoop(){
   asciiOut.style.background=bgInput.value;
   asciiOut.style.color=txtInput.value;
 
-  can.width=width;
+  if(can.width!==width)can.width=width;
   const ratio=vid.videoHeight/vid.videoWidth;
-  can.height=Math.floor(width*ratio/2);
+  const newHeight=Math.floor(width*ratio/2);
+  if(can.height!==newHeight)can.height=newHeight;
 
   ctx.drawImage(vid,0,0,can.width,can.height);
   const frame=ctx.getImageData(0,0,can.width,can.height);
