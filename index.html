@@ -115,6 +115,34 @@ const txtInput = document.getElementById('txt');
 
 let running=false, recorder=null, chunks=[], stream=null;
 
+// Performance Optimization: Cache configuration
+const config = {
+  width: parseInt(widthInput.value),
+  font: parseInt(fontInput.value),
+  fps: parseInt(fpsInput.value),
+  bg: bgInput.value,
+  txt: txtInput.value
+};
+
+const currentStyle = {
+  fontSize: "",
+  background: "",
+  color: ""
+};
+
+function updateConfig() {
+  config.width = parseInt(widthInput.value);
+  config.font = parseInt(fontInput.value);
+  config.fps = parseInt(fpsInput.value);
+  config.bg = bgInput.value;
+  config.txt = txtInput.value;
+}
+
+[widthInput, fpsInput, fontInput, bgInput, txtInput].forEach(el => {
+  el.addEventListener('input', updateConfig);
+});
+updateConfig();
+
 file.onchange=e=>{
   const f=e.target.files[0];
   if(f){vid.src=URL.createObjectURL(f);vid.load();status.textContent="Video loaded";}
@@ -130,16 +158,29 @@ stop.onclick=()=>{
 
 function renderLoop(){
   if(!running||vid.paused||vid.ended)return;
-  const width=parseInt(widthInput.value);
-  const font=parseInt(fontInput.value);
-  const fps=parseInt(fpsInput.value);
-  asciiOut.style.fontSize=font+"px";
-  asciiOut.style.background=bgInput.value;
-  asciiOut.style.color=txtInput.value;
 
-  can.width=width;
+  const { width, font, fps, bg, txt } = config;
+
+  if (currentStyle.fontSize !== font) {
+    asciiOut.style.fontSize = font + "px";
+    currentStyle.fontSize = font;
+  }
+  if (currentStyle.background !== bg) {
+    asciiOut.style.background = bg;
+    currentStyle.background = bg;
+  }
+  if (currentStyle.color !== txt) {
+    asciiOut.style.color = txt;
+    currentStyle.color = txt;
+  }
+
   const ratio=vid.videoHeight/vid.videoWidth;
-  can.height=Math.floor(width*ratio/2);
+  const targetHeight=Math.floor(width*ratio/2);
+
+  if (can.width !== width || can.height !== targetHeight) {
+    can.width=width;
+    can.height=targetHeight;
+  }
 
   ctx.drawImage(vid,0,0,can.width,can.height);
   const frame=ctx.getImageData(0,0,can.width,can.height);
