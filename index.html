@@ -85,6 +85,7 @@
     <option value="sketch, pencil drawing">Sketch</option>
   </select>
   <button id="ai-generate">Generate AI Art</button>
+  <button id="ai-download" style="display:none;">Download Text</button>
 </div>
 
 <div class="display">
@@ -120,6 +121,7 @@ const status=document.getElementById('status');
 const aiPrompt = document.getElementById('ai-prompt');
 const aiStyle = document.getElementById('ai-style');
 const aiGenerate = document.getElementById('ai-generate');
+const aiDownload = document.getElementById('ai-download');
 
 // Controls for settings
 const widthInput = document.getElementById('width');
@@ -262,8 +264,9 @@ aiGenerate.onclick = async () => {
          vid.pause();
     }
 
-    status.textContent = "Generating AI Image...";
-    asciiOut.textContent = "Generating...";
+    status.textContent = "Connecting to Pollinations.ai...";
+    asciiOut.textContent = "Initializing AI generation...";
+    aiDownload.style.display = 'none';
 
     const style = aiStyle.value;
     const finalPrompt = style ? `${prompt}, ${style}` : prompt;
@@ -276,7 +279,7 @@ aiGenerate.onclick = async () => {
     img.src = imageUrl;
 
     img.onload = () => {
-        status.textContent = "Processing ASCII...";
+        status.textContent = "Image loaded. Converting to ASCII...";
 
         const width = parseInt(widthInput.value);
         const font = parseInt(fontInput.value);
@@ -293,13 +296,26 @@ aiGenerate.onclick = async () => {
         const frame = ctx.getImageData(0, 0, can.width, can.height);
         asciiOut.textContent = frameToASCII(frame);
 
-        status.textContent = "AI Art Generated!";
+        status.textContent = "AI Art Generated! You can now download the text.";
+        aiDownload.style.display = 'inline-block';
     };
 
     img.onerror = () => {
-        status.textContent = "Error generating image.";
+        status.textContent = "Error generating image. Pollinations.ai might be busy.";
         asciiOut.textContent = "Error loading image from AI service.";
     };
+};
+
+aiDownload.onclick = () => {
+    const text = asciiOut.textContent;
+    if (!text) return;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ai_ascii_art.txt';
+    a.click();
+    URL.revokeObjectURL(url);
 };
 
 // Recording
