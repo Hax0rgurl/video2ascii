@@ -31,6 +31,12 @@
   }
   .display{display:flex;justify-content:center;align-items:flex-start;gap:1em;flex-wrap:wrap;}
   #status{margin-top:0.5em;color:#0f0;}
+  .rainbow {
+    background: linear-gradient(to right, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8f00ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+  }
 </style>
 </head>
 <body>
@@ -48,6 +54,7 @@
       <option value="amber">Retro Amber</option>
       <option value="pastel">Soft Pastel</option>
       <option value="rainbow">Rainbow</option>
+      <option value="custom" hidden disabled>Custom</option>
     </select>
   </label>
   <label>BG:<input type="color" id="bg" value="#000000"></label>
@@ -116,6 +123,31 @@ const start=document.getElementById('start');
 const stop=document.getElementById('stop');
 const recBtn=document.getElementById('record');
 const status=document.getElementById('status');
+const schemeSelect = document.getElementById('scheme');
+const bgInput = document.getElementById('bg');
+const txtInput = document.getElementById('txt');
+
+const schemes = {
+  matrix: { bg: "#000000", txt: "#00ff00" },
+  cyber: { bg: "#000000", txt: "#00ffff" },
+  amber: { bg: "#000000", txt: "#ffb000" },
+  pastel: { bg: "#282828", txt: "#ffb6c1" },
+  rainbow: { bg: "#000000", txt: "#ffffff" }
+};
+
+schemeSelect.onchange = () => {
+  const s = schemes[schemeSelect.value];
+  if (s) {
+    bgInput.value = s.bg;
+    txtInput.value = s.txt;
+  }
+};
+
+[bgInput, txtInput].forEach(el => {
+  el.addEventListener('input', () => {
+    schemeSelect.value = 'custom';
+  });
+});
 
 // AI Elements
 const aiPrompt = document.getElementById('ai-prompt');
@@ -152,6 +184,15 @@ function renderLoop(){
   const font=parseInt(fontInput.value);
   const fps=parseInt(fpsInput.value);
   asciiOut.style.fontSize=font+"px";
+  if(schemeSelect.value === 'rainbow') {
+    asciiOut.classList.add('rainbow');
+    asciiOut.style.background = '';
+    asciiOut.style.color = 'transparent';
+  } else {
+    asciiOut.classList.remove('rainbow');
+    asciiOut.style.background = bg.value;
+    asciiOut.style.color = txt.value;
+  }
   asciiOut.style.background=bgInput.value;
   asciiOut.style.color=txtInput.value;
 
