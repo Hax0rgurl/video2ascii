@@ -78,19 +78,12 @@
       <option value="1080p">1080p</option>
     </select>
   </label>
+  <label>Keep Audio:<input type="checkbox" id="keep-audio"></label>
   <button id="start">Convert</button>
   <button id="record">Record</button>
   <button id="stop">Stop</button>
 </div>
 
-<h2>AI ASCII Art Generator</h2>
-<div class="controls">
-  <input type="text" id="ai-prompt" placeholder="Enter prompt..." style="width: 300px;">
-  <select id="ai-style">
-    <option value="default">Default</option>
-    <option value="minimalist">Minimalist</option>
-  </select>
-  <button id="ai-generate">Generate</button>
 <h2>🤖 AI ASCII Art Generator</h2>
 <div class="controls">
   <input type="text" id="ai-prompt" placeholder="Enter text prompt..." style="width: 200px;">
@@ -108,7 +101,7 @@
 
 <div class="controls" id="ai-settings">
   <label>Provider:
-    <select id="ai-provider" onchange="toggleApiKey()">
+    <select id="ai-provider">
       <option value="pollinations">Pollinations (Free)</option>
       <option value="openai">OpenAI (API Key)</option>
       <option value="mock">Mock (Test)</option>
@@ -123,8 +116,6 @@
   <video id="video" controls></video>
   <pre id="ascii" style="display:none;"></pre>
   <canvas id="ascii-canvas"></canvas>
-  <pre id="ascii"></pre>
-  <canvas id="ascii-canvas" style="display:none;"></canvas>
 </div>
 <canvas id="canvas" style="display:none;"></canvas>
 <canvas id="recording-canvas" style="display:none;"></canvas>
@@ -136,23 +127,50 @@
 <script>
 const { createFFmpeg, fetchFile } = FFmpeg;
 const chars="@#8&$%WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
-const file=document.getElementById('file');
-const vid=document.getElementById('video');
-const can=document.getElementById('canvas');
-const recordingCan=document.getElementById('recording-canvas');
-const ctx=can.getContext('2d');
-const recordingCtx=recordingCan.getContext('2d');
-const asciiOut=document.getElementById('ascii');
-const asciiCanvas=document.getElementById('ascii-canvas');
-const asciiCtx=asciiCanvas.getContext('2d');
-const resolution=document.getElementById('resolution');
-const start=document.getElementById('start');
-const stop=document.getElementById('stop');
-const recBtn=document.getElementById('record');
-const status=document.getElementById('status');
+
+// DOM Elements
+const file = document.getElementById('file');
+const vid = document.getElementById('video');
+const can = document.getElementById('canvas');
+const recordingCan = document.getElementById('recording-canvas');
+const ctx = can.getContext('2d');
+const recordingCtx = recordingCan.getContext('2d');
+const asciiOut = document.getElementById('ascii');
+const asciiCanvas = document.getElementById('ascii-canvas');
+const asciiCtx = asciiCanvas.getContext('2d');
+const resolution = document.getElementById('resolution');
+const start = document.getElementById('start');
+const stop = document.getElementById('stop');
+const recBtn = document.getElementById('record');
+const status = document.getElementById('status');
 const schemeSelect = document.getElementById('scheme');
 const bgInput = document.getElementById('bg');
 const txtInput = document.getElementById('txt');
+const widthInput = document.getElementById('width');
+const fpsInput = document.getElementById('fps');
+const fontInput = document.getElementById('fontsize');
+const keepAudio = document.getElementById('keep-audio');
+const fxSelect = document.getElementById('fx');
+
+// AI Elements
+const aiPrompt = document.getElementById('ai-prompt');
+const aiStyle = document.getElementById('ai-style');
+const aiGenerate = document.getElementById('ai-generate');
+const aiDownload = document.getElementById('ai-download');
+const aiProvider = document.getElementById('ai-provider');
+const aiApiKey = document.getElementById('ai-api-key');
+const aiEnhance = document.getElementById('ai-enhance');
+const aiStatusDetail = document.getElementById('ai-status-detail');
+
+let running = false;
+let recorder = null;
+let chunks = [];
+let stream = null;
+let effectState = {
+  matrix: { drops: [] },
+  glitch: { timer: 0 },
+  oldtv: { offset: 0 }
+};
 
 const schemes = {
   matrix: { bg: "#000000", txt: "#00ff00" },
@@ -162,6 +180,7 @@ const schemes = {
   rainbow: { bg: "#000000", txt: "#ffffff" }
 };
 
+// Event Listeners
 schemeSelect.onchange = () => {
   const s = schemes[schemeSelect.value];
   if (s) {
@@ -176,119 +195,337 @@ schemeSelect.onchange = () => {
   });
 });
 
-// AI Elements
-const aiPrompt = document.getElementById('ai-prompt');
-const aiStyle = document.getElementById('ai-style');
-const aiGenerate = document.getElementById('ai-generate');
-const aiDownload = document.getElementById('ai-download');
-
-// Controls for settings
-const widthInput = document.getElementById('width');
-const fpsInput = document.getElementById('fps');
-const fontInput = document.getElementById('fontsize');
-const bgInput = document.getElementById('bg');
-const txtInput = document.getElementById('txt');
-const keepAudio = document.getElementById('keep-audio');
-
-let running=false, recorder=null, chunks=[], stream=null;
-
-// Color Schemes
-const schemes = {
-  matrix: {bg:"#000000", txt:"#00ff00"},
-  cyber: {bg:"#000000", txt:"#00ffff"},
-  amber: {bg:"#000000", txt:"#ffb000"},
-  pastel: {bg:"#222222", txt:"#ffb6c1"},
-  rainbow: {bg:"#000000", txt:"#ffffff"} // Rainbow handled in render? For now just white.
-};
-
-document.getElementById('scheme').onchange = (e) => {
-  const s = schemes[e.target.value];
-  if(s){
-    document.getElementById('bg').value = s.bg;
-    document.getElementById('txt').value = s.txt;
+aiProvider.onchange = () => {
+  if (aiProvider.value === 'openai') {
+    aiApiKey.style.display = 'inline-block';
+  } else {
+    aiApiKey.style.display = 'none';
   }
 };
 
-file.onchange=e=>{
-  const f=e.target.files[0];
-  if(f){vid.src=URL.createObjectURL(f);vid.load();status.textContent="Video loaded";}
+file.onchange = e => {
+  const f = e.target.files[0];
+  if (f) {
+    vid.src = URL.createObjectURL(f);
+    vid.load();
+    status.textContent = "Video loaded";
+  }
 };
 
-start.onclick=()=>{if(!vid.src)return alert("Load a video");running=true;vid.play();renderLoop();};
-
-stop.onclick=()=>{
-  running=false;vid.pause();
-  if(recorder&&recorder.state==="recording")recorder.stop();
-  status.textContent="Stopped.";
+start.onclick = () => {
+  if (!vid.src) return alert("Load a video");
+  running = true;
+  vid.play();
+  renderLoop();
 };
 
-let effectState = {
-  matrix: { drops: [] },
-  glitch: { timer: 0 },
-  oldtv: { offset: 0 }
+stop.onclick = () => {
+  running = false;
+  vid.pause();
+  if (recorder && recorder.state === "recording") recorder.stop();
+  status.textContent = "Stopped.";
 };
 
-function renderLoop(){
-  if(!running||vid.paused||vid.ended)return;
-  const wVal=parseInt(document.getElementById('width').value);
-  const font=parseInt(document.getElementById('fontsize').value);
-  const fpsVal=parseInt(document.getElementById('fps').value);
-  const bgColor=document.getElementById('bg').value;
-  const txtColor=document.getElementById('txt').value;
-  const effect=document.getElementById('fx').value;
-
-  can.width=wVal;
-  const ratio=vid.videoHeight/vid.videoWidth;
-  can.height=Math.floor(wVal*ratio/2);
-
-  ctx.drawImage(vid,0,0,can.width,can.height);
-  const frame=ctx.getImageData(0,0,can.width,can.height);
-  const asciiText=frameToASCII(frame);
-
-  renderASCII(asciiText, wVal, font, bgColor, txtColor, effect);
-
-  setTimeout(()=>requestAnimationFrame(renderLoop),1000/fpsVal);
+function frameToASCII(frame){
+  const p=frame.data,w=frame.width,h=frame.height;let out="";
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const i=(y*w+x)*4;
+      const r=p[i],g=p[i+1],b=p[i+2];
+      const bright=(0.299*r+0.587*g+0.114*b)/255;
+      const idx=Math.floor((1-bright)*(chars.length-1));
+      out+=chars[idx];
+    }
+    out+="\n";
+  }
+  return out;
 }
 
-function renderASCII(text, cols, fontSize, bgColor, txtColor, effect) {
-  asciiCtx.font = fontSize + "px monospace";
-  asciiCtx.textBaseline = "top";
-  const metrics = asciiCtx.measureText("W");
+async function enhancePrompt(prompt, provider, key) {
+  if (provider === 'mock') return "Enhanced (Mock): " + prompt;
+  if (provider === 'openai') {
+    if (!key) throw new Error("API Key required for OpenAI");
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: [{role: "user", content: "Enhance this prompt for an AI image generator: " + prompt}],
+        max_tokens: 100
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    return data.choices[0].message.content.trim();
+  }
+  // Default Pollinations
+  try {
+      const res = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}`);
+      if (!res.ok) throw new Error("Pollinations text API error");
+      return await res.text();
+  } catch (e) {
+      console.warn("Pollinations text failed, using original", e);
+      return prompt;
+  }
+}
+
+aiGenerate.onclick = async () => {
+    const prompt = aiPrompt.value.trim();
+    if (!prompt) return alert("Please enter a prompt");
+
+    if (running) {
+         running = false;
+         vid.pause();
+         status.textContent = "Video stopped for AI generation.";
+    }
+
+    status.textContent = "Initializing AI generation...";
+    asciiOut.textContent = "Initializing AI generation...";
+    aiDownload.style.display = 'none';
+
+    // Clear canvases
+    ctx.clearRect(0,0,can.width,can.height);
+    asciiCtx.clearRect(0,0,asciiCanvas.width,asciiCanvas.height);
+
+    const provider = aiProvider.value;
+    const key = aiApiKey.value.trim();
+    const shouldEnhance = aiEnhance.checked;
+    const style = aiStyle.value;
+
+    try {
+        let currentPrompt = prompt;
+        if (style) currentPrompt += ", " + style;
+
+        // 1. Enhance Prompt
+        if (shouldEnhance) {
+             status.textContent = "Enhancing Prompt...";
+             aiStatusDetail.textContent = "Enhancing prompt with " + provider + "...";
+             try {
+                currentPrompt = await enhancePrompt(currentPrompt, provider, key);
+                aiStatusDetail.textContent = "Enhanced: " + currentPrompt;
+             } catch (e) {
+                console.error(e);
+                aiStatusDetail.textContent = "Enhancement failed: " + e.message + ". Using original.";
+             }
+        }
+
+        // 2. Generate Image URL
+        status.textContent = "Generating Image...";
+        let imageUrl = "";
+        if (provider === 'openai') {
+             if (!key) throw new Error("API Key required for OpenAI");
+             const res = await fetch('https://api.openai.com/v1/images/generations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${key}`
+                },
+                body: JSON.stringify({
+                    prompt: currentPrompt,
+                    n: 1,
+                    size: "512x512"
+                })
+             });
+             const data = await res.json();
+             if(data.error) throw new Error(data.error.message);
+             imageUrl = data.data[0].url;
+        } else if (provider === 'mock') {
+            imageUrl = "https://placehold.co/512x512?text=Mock+AI";
+        } else {
+             // Pollinations
+             imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(currentPrompt)}`;
+        }
+
+        // 3. Process Image
+        status.textContent = "Loading Image...";
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.src = imageUrl;
+
+        img.onload = () => {
+            status.textContent = "Converting to ASCII...";
+
+            const wVal = parseInt(widthInput.value);
+            const font = parseInt(fontInput.value);
+            const bg = bgInput.value;
+            const txt = txtInput.value;
+
+            // Resize intermediate canvas
+            can.width = wVal;
+            const ratio = img.height / img.width;
+            can.height = Math.floor(wVal * ratio / 2);
+
+            ctx.drawImage(img, 0, 0, can.width, can.height);
+            const frame = ctx.getImageData(0, 0, can.width, can.height);
+
+            const txtContent = frameToASCII(frame);
+
+            // Display logic
+            asciiOut.style.display = 'inline-block';
+            asciiCanvas.style.display = 'none';
+            asciiOut.style.fontSize = font + "px";
+            asciiOut.style.background = bg;
+            asciiOut.style.color = txt;
+            asciiOut.textContent = txtContent;
+
+            status.textContent = "AI Art Generated! You can now download the text.";
+            aiDownload.style.display = 'inline-block';
+        };
+
+        img.onerror = () => {
+            status.textContent = "Error loading image (CORS or Network).";
+            console.error("Image load error");
+        };
+
+    } catch (e) {
+        console.error(e);
+        status.textContent = "AI Generation failed: " + e.message;
+    }
+};
+
+aiDownload.onclick = () => {
+    const text = asciiOut.textContent;
+    if (!text) return;
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ai_ascii_art.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
+function renderLoop() {
+  if (!running || vid.paused || vid.ended) return;
+
+  const wVal = parseInt(widthInput.value);
+  const font = parseInt(fontInput.value);
+  const fpsVal = parseInt(fpsInput.value);
+  const effect = fxSelect.value;
+  const res = resolution.value;
+  const bg = bgInput.value;
+  const txt = txtInput.value;
+
+  // Resize intermediate canvas
+  if (can.width !== wVal) can.width = wVal;
+  const ratio = vid.videoHeight / vid.videoWidth;
+  can.height = Math.floor(wVal * ratio / 2);
+
+  ctx.drawImage(vid, 0, 0, can.width, can.height);
+  const frame = ctx.getImageData(0, 0, can.width, can.height);
+  const asciiText = frameToASCII(frame);
+
+  renderASCII(asciiText, wVal, font, bg, txt, effect, res);
+
+  setTimeout(() => requestAnimationFrame(renderLoop), 1000 / fpsVal);
+}
+
+function renderASCII(text, cols, fontSize, bgColor, txtColor, effect, res) {
+  const isRecording = recorder && recorder.state === 'recording';
+
+  // Use <pre> for dynamic resolution with no effects (performance), ONLY if not recording
+  if (!isRecording && res === 'dynamic' && effect === 'none') {
+    asciiCanvas.style.display = 'none';
+    asciiOut.style.display = 'inline-block';
+
+    asciiOut.style.fontSize = fontSize + "px";
+    if (schemeSelect.value === 'rainbow') {
+       asciiOut.classList.add('rainbow');
+       asciiOut.style.background = '';
+       asciiOut.style.backgroundColor = bgColor;
+    } else {
+       asciiOut.classList.remove('rainbow');
+       asciiOut.style.background = bgColor;
+       asciiOut.style.color = txtColor;
+    }
+    asciiOut.textContent = text;
+    return;
+  }
+
+  // Use Canvas
+  asciiOut.style.display = 'none';
+  asciiCanvas.style.display = 'block';
+
+  let targetW, targetH;
+
+  // Determine target dimensions
+  if (res === 'dynamic') {
+      // Measure using the requested font size
+      asciiCtx.font = fontSize + "px monospace";
+      const metrics = asciiCtx.measureText("W");
+      const charW = metrics.width;
+      const charH = fontSize * 0.6;
+      const lines = text.split('\n');
+      targetW = Math.ceil(cols * charW);
+      targetH = Math.ceil(lines.length * charH);
+  } else {
+      if (res === '480p') { targetW = 854; targetH = 480; }
+      else if (res === '720p') { targetW = 1280; targetH = 720; }
+      else if (res === '1080p') { targetW = 1920; targetH = 1080; }
+  }
+
+  if (asciiCanvas.width !== targetW || asciiCanvas.height !== targetH) {
+      asciiCanvas.width = targetW;
+      asciiCanvas.height = targetH;
+  }
+
+  // Draw
+  const drawnMetrics = drawAsciiToCanvas(text, asciiCanvas, bgColor, txtColor, res === 'dynamic' ? fontSize : null);
+
+  // Effects
+  if (effect !== 'none') {
+      const { charW, charH } = drawnMetrics;
+      if (effect === 'matrix') applyMatrixEffect(asciiCanvas.width, asciiCanvas.height, charW, charH);
+      else if (effect === 'glitch') applyGlitchEffect(asciiCanvas.width, asciiCanvas.height);
+      else if (effect === 'oldtv') applyOldTVEffect(asciiCanvas.width, asciiCanvas.height);
+  }
+}
+
+function drawAsciiToCanvas(text, canvas, bgColor, txtColor, forceFontSize) {
+  const ctx = canvas.getContext('2d');
+  const lines = text.split('\n');
+  const cols = lines[0].length;
+
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  let fontSize = forceFontSize;
+  if (!fontSize) {
+      // Calculate font size to fit width
+      const charW = canvas.width / cols;
+      fontSize = charW / 0.6; // approx
+  }
+
+  ctx.font = fontSize + "px monospace";
+  ctx.textBaseline = "top";
+
+  // Handle Rainbow
+  if (schemeSelect.value === 'rainbow') {
+      const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+      gradient.addColorStop(0, "red");
+      gradient.addColorStop(0.14, "orange");
+      gradient.addColorStop(0.28, "yellow");
+      gradient.addColorStop(0.42, "lime");
+      gradient.addColorStop(0.57, "blue");
+      gradient.addColorStop(0.71, "indigo");
+      gradient.addColorStop(0.85, "violet");
+      ctx.fillStyle = gradient;
+  } else {
+      ctx.fillStyle = txtColor;
+  }
+
+  const metrics = ctx.measureText("W");
   const charW = metrics.width;
   const charH = fontSize * 0.6;
 
-  const lines = text.split('\n');
-  const rows = lines.length;
-
-  const targetW = Math.ceil(cols * charW);
-  const targetH = Math.ceil(rows * charH);
-
-  if (asciiCanvas.width !== targetW || asciiCanvas.height !== targetH) {
-     asciiCanvas.width = targetW;
-     asciiCanvas.height = targetH;
-     // Reset font after resize
-     asciiCtx.font = fontSize + "px monospace";
-     asciiCtx.textBaseline = "top";
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], 0, i * charH);
   }
 
-  // Draw Background
-  asciiCtx.fillStyle = bgColor;
-  asciiCtx.fillRect(0, 0, asciiCanvas.width, asciiCanvas.height);
-
-  // Draw Text
-  asciiCtx.fillStyle = txtColor;
-  for (let i = 0; i < rows; i++) {
-    asciiCtx.fillText(lines[i], 0, i * charH);
-  }
-
-  // Apply Effects
-  if (effect === 'matrix') {
-     applyMatrixEffect(asciiCanvas.width, asciiCanvas.height, charW, charH);
-  } else if (effect === 'glitch') {
-     applyGlitchEffect(asciiCanvas.width, asciiCanvas.height);
-  } else if (effect === 'oldtv') {
-     applyOldTVEffect(asciiCanvas.width, asciiCanvas.height);
-  }
+  return { charW, charH };
 }
 
 function applyMatrixEffect(w, h, charW, charH) {
@@ -301,14 +538,12 @@ function applyMatrixEffect(w, h, charW, charH) {
       const x = i * charW;
       const y = effectState.matrix.drops[i];
 
-      // Draw random katakana or char
+      // Random character
       const char = String.fromCharCode(0x30A0 + Math.random() * 96);
 
-      // Bright head
       asciiCtx.fillStyle = '#fff';
       asciiCtx.fillText(char, x, y);
 
-      // Trail
       asciiCtx.fillStyle = 'rgba(0, 255, 0, 0.5)';
       asciiCtx.fillText(char, x, y - charH);
 
@@ -338,341 +573,109 @@ function applyGlitchEffect(w, h) {
 }
 
 function applyOldTVEffect(w, h) {
-  // Scanlines
   asciiCtx.fillStyle = "rgba(0,0,0,0.1)";
   for (let y = 0; y < h; y += 4) {
       asciiCtx.fillRect(0, y, w, 2);
   }
-  // Vignette
   const grad = asciiCtx.createRadialGradient(w/2, h/2, h/3, w/2, h/2, h);
   grad.addColorStop(0, "rgba(0,0,0,0)");
   grad.addColorStop(1, "rgba(0,0,0,0.6)");
   asciiCtx.fillStyle = grad;
   asciiCtx.fillRect(0, 0, w, h);
-  const width=parseInt(widthInput.value);
-  const font=parseInt(fontInput.value);
-  const fps=parseInt(fpsInput.value);
-  asciiOut.style.fontSize=font+"px";
-  if(schemeSelect.value === 'rainbow') {
-    asciiOut.classList.add('rainbow');
-    asciiOut.style.background = '';
-    asciiOut.style.color = 'transparent';
-  } else {
-    asciiOut.classList.remove('rainbow');
-    asciiOut.style.background = bg.value;
-    asciiOut.style.color = txt.value;
-  }
-  asciiOut.style.background=bgInput.value;
-  asciiOut.style.color=txtInput.value;
-
-  if(can.width!==width)can.width=width;
-  const ratio=vid.videoHeight/vid.videoWidth;
-  can.height=Math.floor(widthVal*ratio/2);
-
-  ctx.drawImage(vid,0,0,can.width,can.height);
-  const frame=ctx.getImageData(0,0,can.width,can.height);
-  const txtContent = frameToASCII(frame);
-
-  const res = resolution.value;
-  if (res === 'dynamic') {
-    asciiCanvas.style.display = 'none';
-    asciiOut.style.display = 'inline-block';
-    asciiOut.style.fontSize=font+"px";
-    asciiOut.style.background=bg.value;
-    asciiOut.style.color=txt.value;
-    asciiOut.textContent=txtContent;
-  } else {
-    asciiOut.style.display = 'none';
-    asciiCanvas.style.display = 'inline-block';
-    let targetW = 1280, targetH = 720;
-    if (res === '480p') { targetW=854; targetH=480; }
-    else if (res === '1080p') { targetW=1920; targetH=1080; }
-
-    drawAsciiToCanvas(txtContent, targetW, targetH, widthVal);
-  }
-
-  setTimeout(()=>requestAnimationFrame(renderLoop),1000/fps);
 }
 
-function drawAsciiToCanvas(text, w, h, charsPerLine) {
-  asciiCanvas.width = w;
-  asciiCanvas.height = h;
-  const actx = asciiCtx;
-
-  actx.fillStyle = bg.value;
-  actx.fillRect(0, 0, w, h);
-
-  const charWidth = w / charsPerLine;
-  const fontSize = charWidth / 0.6; // approx for monospace
-  const lineHeight = fontSize * 0.6; // matching css line-height 0.6em
-
-  actx.font = `${fontSize}px monospace`;
-  actx.fillStyle = txt.value;
-  actx.textBaseline = 'top';
-
-  const lines = text.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    actx.fillText(lines[i], 0, i * lineHeight);
-  }
-}
-
-function frameToASCII(frame){
-  const p=frame.data,w=frame.width,h=frame.height;let out="";
-  for(let y=0;y<h;y++){
-    for(let x=0;x<w;x++){
-      const i=(y*w+x)*4;
-      const r=p[i],g=p[i+1],b=p[i+2];
-      const bright=(0.299*r+0.587*g+0.114*b)/255;
-      const idx=Math.floor((1-bright)*(chars.length-1));
-      out+=chars[idx];
-    }
-    out+="\n";
-  }
-  return out;
-}
-
-function drawAsciiToCanvas(text, canvas, fontSize, bgColor, txtColor) {
-  const ctx = canvas.getContext('2d');
-  const lines = text.split('\n');
-  if (!lines.length) return;
-
-  // Set font to measure roughly
-  ctx.font = fontSize + "px monospace";
-  const charWidth = ctx.measureText("A").width;
-  const lineHeight = fontSize * 0.6;
-
-  const newWidth = Math.ceil(lines[0].length * charWidth);
-  const newHeight = Math.ceil(lines.length * lineHeight);
-
-  // Resize if needed (clears canvas)
-  if (canvas.width !== newWidth || canvas.height !== newHeight) {
-    canvas.width = newWidth;
-    canvas.height = newHeight;
+recBtn.onclick = async () => {
+  if (!running) {
+      alert("Please start the video first.");
+      return;
   }
 
-  // Draw background
-  ctx.fillStyle = bgColor;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Draw text
-  ctx.fillStyle = txtColor;
-  ctx.font = fontSize + "px monospace";
-  ctx.textBaseline = "top";
-
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], 0, i * lineHeight);
+  if (recorder && recorder.state === "recording") {
+      recorder.stop();
+      recBtn.textContent = "Record";
+      recBtn.style.background = "#111";
+      recBtn.style.color = "#0f0";
+      return;
   }
-}
 
-// AI Generation Logic
-aiGenerate.onclick = async () => {
-    const prompt = aiPrompt.value.trim();
-    if (!prompt) return alert("Please enter a prompt");
-
-    if (running) {
-         running = false;
-         vid.pause();
-    }
-
-    status.textContent = "Connecting to Pollinations.ai...";
-    asciiOut.textContent = "Initializing AI generation...";
-    aiDownload.style.display = 'none';
-
-    const provider = aiProvider.value;
-    const key = aiApiKey.value.trim();
-    const shouldEnhance = aiEnhance.checked;
-    const style = aiStyle.value;
-
-    try {
-        let currentPrompt = prompt;
-
-        // 1. Enhance Prompt
-        if (shouldEnhance) {
-             status.textContent = "Enhancing Prompt...";
-             aiStatusDetail.textContent = "Enhancing prompt with " + provider + "...";
-             currentPrompt = await enhancePrompt(prompt, provider, key);
-             aiStatusDetail.textContent = "Enhanced: " + currentPrompt;
-        }
-
-    img.onload = () => {
-        status.textContent = "Image loaded. Converting to ASCII...";
-
-        // 3. Process Image
-        status.textContent = "Loading Image...";
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.src = imageUrl;
-
-        img.onload = () => {
-            status.textContent = "Converting to ASCII...";
-
-            const width = parseInt(widthInput.value);
-            const font = parseInt(fontInput.value);
-
-            asciiOut.style.fontSize = font + "px";
-            asciiOut.style.background = bgInput.value;
-            asciiOut.style.color = txtInput.value;
-
-        status.textContent = "AI Art Generated! You can now download the text.";
-        aiDownload.style.display = 'inline-block';
-    };
-
-    img.onerror = () => {
-        status.textContent = "Error generating image. Pollinations.ai might be busy.";
-        asciiOut.textContent = "Error loading image from AI service.";
-    };
-};
-
-aiDownload.onclick = () => {
-    const text = asciiOut.textContent;
-    if (!text) return;
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'ai_ascii_art.txt';
-    a.click();
-    URL.revokeObjectURL(url);
-};
-
-// Recording
-recBtn.onclick=async()=>{
-  if(!running)start.click();
-  if(recorder&&recorder.state==="recording")return;
-  const fpsVal = parseInt(document.getElementById('fps').value);
-  stream=asciiCanvas.captureStream(fpsVal);
-  recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
-  chunks=[];
-  recorder.ondataavailable=e=>chunks.push(e.data);
-  recorder.onstop=saveRecording;
-  recorder.start();
-  status.textContent="Recording ASCII...";
-  vid.onended=()=>recorder.stop();
-
+  // Start Recording
   try {
-    // Initial draw
-    const font=parseInt(fontInput.value);
-    drawAsciiToCanvas(asciiOut.textContent || " ", recordingCan, font, bgInput.value, txtInput.value);
+      const fps = parseInt(fpsInput.value);
+      // We rely on renderASCII to switch to canvas mode if needed
+      // But we need to grab the stream from the canvas
+      stream = asciiCanvas.captureStream(fps);
 
-    stream=recordingCan.captureStream(parseInt(fpsInput.value));
+      // Audio
+      if (keepAudio.checked) {
+          try {
+              let audioStream = vid.captureStream ? vid.captureStream() : vid.mozCaptureStream();
+              if (audioStream) {
+                  const audioTracks = audioStream.getAudioTracks();
+                  if (audioTracks.length > 0) {
+                      stream.addTrack(audioTracks[0]);
+                  }
+              }
+          } catch(e) {
+              console.warn("Audio capture failed", e);
+          }
+      }
 
-    // Add audio if requested
-    if (keepAudio.checked) {
-        let audioStream = null;
-        if (vid.captureStream) {
-            audioStream = vid.captureStream();
-        } else if (vid.mozCaptureStream) {
-            audioStream = vid.mozCaptureStream();
-        }
+      recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
+      chunks = [];
+      recorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = saveRecording;
 
-        if (audioStream) {
-            const audioTracks = audioStream.getAudioTracks();
-            if (audioTracks.length > 0) {
-                stream.addTrack(audioTracks[0]);
-            }
-        }
-    }
+      recorder.start();
+      recBtn.textContent = "Recording...";
+      recBtn.style.background = "#f00";
+      recBtn.style.color = "#fff";
+      status.textContent = "Recording started...";
 
-    recorder=new MediaRecorder(stream,{mimeType:"video/webm"});
-    chunks=[];
-    recorder.ondataavailable=e=>chunks.push(e.data);
-    recorder.onstop=saveRecording;
-    recorder.start();
-    status.textContent="Recording ASCII...";
-    vid.onended=()=>recorder.stop();
   } catch(e) {
       console.error(e);
-      status.textContent = "Recording failed: " + e.message;
-      alert("Recording failed. See console for details.");
+      alert("Recording failed: " + e.message);
   }
 };
 
-// Save .webm and optionally convert to .mp4
-async function saveRecording(){
-  const blob=new Blob(chunks,{type:"video/webm"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;a.download="ascii_video.webm";a.click();
-  status.textContent="Saved ascii_video.webm";
+async function saveRecording() {
+  const blob = new Blob(chunks, { type: "video/webm" });
+  const url = URL.createObjectURL(blob);
 
-  // Optional MP4 conversion
-  const ffmpeg=createFFmpeg({log:false});
-  await ffmpeg.load();
-  await ffmpeg.FS('writeFile','input.webm',await fetchFile(blob));
-  await ffmpeg.run('-i','input.webm','-c:v','libx264','output.mp4');
-  const data=ffmpeg.FS('readFile','output.mp4');
-  const mp4URL=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
-  const b=document.createElement('a');
-  b.href=mp4URL;b.download='ascii_video.mp4';b.click();
-  status.textContent+=" and ascii_video.mp4";
+  // Download WebM
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "ascii_video.webm";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  status.textContent = "Saved .webm. Converting to MP4...";
+
   try {
-      if(typeof FFmpeg === 'undefined') throw new Error("FFmpeg not loaded");
-      status.textContent += ". Converting to MP4...";
-      const { createFFmpeg, fetchFile } = FFmpeg;
-      const ffmpeg = createFFmpeg({ log: false });
+      if (typeof FFmpeg === 'undefined') throw new Error("FFmpeg not loaded");
+      const ffmpeg = createFFmpeg({ log: true });
       await ffmpeg.load();
+
       await ffmpeg.FS('writeFile', 'input.webm', await fetchFile(blob));
       await ffmpeg.run('-i', 'input.webm', '-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4');
+
       const data = ffmpeg.FS('readFile', 'output.mp4');
-      const mp4URL = URL.createObjectURL(new Blob([data.buffer], {type: 'video/mp4'}));
-      const b = document.createElement('a');
-      b.href = mp4URL;
-      b.download = 'ascii_video.mp4';
+      const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
+      const mp4Url = URL.createObjectURL(mp4Blob);
+
+      const b = document.createElement("a");
+      b.href = mp4Url;
+      b.download = "ascii_video.mp4";
+      document.body.appendChild(b);
       b.click();
-      status.textContent += " and ascii_video.mp4";
-  } catch(e) {
-      console.log("FFmpeg conversion failed or skipped:", e);
-      status.textContent += ". MP4 conversion failed.";
+      document.body.removeChild(b);
+
+      status.textContent = "Saved .webm and .mp4!";
+  } catch (e) {
+      console.error(e);
+      status.textContent = "Saved .webm. MP4 conversion failed: " + e.message;
   }
 }
 
-// AI Generator
-const aiPrompt = document.getElementById('ai-prompt');
-const aiStyle = document.getElementById('ai-style');
-const aiBtn = document.getElementById('ai-generate');
-
-aiBtn.onclick = () => {
-  const prompt = aiPrompt.value.trim();
-  if(!prompt) return alert("Please enter a prompt");
-
-  // Stop video loop if running
-  if(running) stop.click();
-
-  status.textContent = "Generating AI Image...";
-
-  let finalPrompt = prompt;
-  if(aiStyle.value === 'minimalist') finalPrompt += ", minimalist, simple lines, high contrast";
-
-  const encodedPrompt = encodeURIComponent(finalPrompt);
-  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}`;
-
-  const img = new Image();
-  img.crossOrigin = "Anonymous";
-  img.src = url;
-
-  img.onload = () => {
-    const wVal = parseInt(document.getElementById('width').value);
-    const fontVal = parseInt(document.getElementById('fontsize').value);
-
-    asciiOut.style.fontSize = fontVal + "px";
-    asciiOut.style.background = document.getElementById('bg').value;
-    asciiOut.style.color = document.getElementById('txt').value;
-
-    can.width = wVal;
-    const ratio = img.height / img.width;
-    can.height = Math.floor(wVal * ratio / 2);
-
-    ctx.drawImage(img, 0, 0, can.width, can.height);
-    const frame = ctx.getImageData(0, 0, can.width, can.height);
-    asciiOut.textContent = frameToASCII(frame);
-    status.textContent = "AI Art Generated!";
-  };
-
-  img.onerror = () => {
-    status.textContent = "Error loading AI image.";
-    alert("Failed to load image from Pollinations.ai");
-  };
-};
 </script>
 </body>
 </html>
